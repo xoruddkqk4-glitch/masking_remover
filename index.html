@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduMask - 수업용 가림판 및 순차 공개 도구</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- PDF.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+</head>
+<body>
+
+  <!-- 파일 드롭 감지 오버레이 -->
+  <div id="dragDropOverlay" class="drag-drop-overlay">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+      <polyline points="17 8 12 3 7 8"></polyline>
+      <line x1="12" y1="3" x2="12" y2="15"></line>
+    </svg>
+    <div class="drag-drop-title">여기에 PDF 또는 이미지 파일을 놓으세요</div>
+  </div>
+
+  <!-- 상단 앱 헤더 -->
+  <header class="app-header">
+    <div class="logo-section">
+      <div class="logo-badge">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="9" y1="3" x2="9" y2="21"></line>
+        </svg>
+        EduMask
+      </div>
+      <span class="app-title">수업용 가림판 도구</span>
+    </div>
+
+    <!-- 중앙: 모드 전환 탭 -->
+    <div class="toolbar-group">
+      <div class="mode-toggle-pill">
+        <button id="modeDrawBtn" class="mode-pill-btn active" title="마우스로 드래그하여 가림판을 만듭니다">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          가림판 그리기
+        </button>
+        <button id="modePresentBtn" class="mode-pill-btn" title="Space나 화살표로 가림판을 순서대로 지웁니다">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          수업 진행 (순차 공개)
+        </button>
+      </div>
+    </div>
+
+    <!-- 우측 도구 모음 -->
+    <div class="toolbar-group">
+      <!-- 파일 업로드 인풋 -->
+      <input type="file" id="fileInput" accept="image/*,application/pdf" style="display: none;">
+      <button id="uploadBtn" class="btn btn-primary" title="PDF 문서 또는 이미지를 엽니다">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        파일 열기
+      </button>
+
+      <div class="divider"></div>
+
+      <!-- 확대/축소 -->
+      <button id="zoomOutBtn" class="btn btn-icon-only" title="축소 (-)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </button>
+      <button id="zoomResetBtn" class="btn btn-sm" title="크기 100% 맞춤">
+        <span id="zoomLevelText">100%</span>
+      </button>
+      <button id="zoomInBtn" class="btn btn-icon-only" title="확대 (+)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </button>
+      <button id="fitWidthBtn" class="btn btn-sm" title="화면 너비에 맞추기">너비맞춤</button>
+
+      <div class="divider"></div>
+
+      <!-- 전체화면 & 단축키 안내 -->
+      <button id="fullscreenBtn" class="btn btn-icon-only" title="전체화면 (F11 / F)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+        </svg>
+      </button>
+
+      <button id="helpBtn" class="btn btn-icon-only" title="단축키 및 사용법 안내">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </button>
+
+      <button id="toggleSidebarBtn" class="btn btn-icon-only" title="사이드바 열기/닫기">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="9" y1="3" x2="9" y2="21"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- 메인 레이아웃 -->
+  <div class="main-layout">
+    <!-- 좌측 사이드바 -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="8" y1="6" x2="21" y2="6"></line>
+            <line x1="8" y1="12" x2="21" y2="12"></line>
+            <line x1="8" y1="18" x2="21" y2="18"></line>
+            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+          </svg>
+          가림판 관리 목록
+        </div>
+        <span id="maskCountBadge" class="btn btn-sm" style="pointer-events: none;">0개</span>
+      </div>
+
+      <div class="sidebar-content">
+        <!-- 가림판 스타일 선택 -->
+        <div class="section-card">
+          <div class="section-card-title">새 가림판 스타일</div>
+          <div class="style-picker-grid">
+            <button class="style-picker-btn active" data-style="slate">
+              <span class="style-swatch swatch-slate"></span>
+              칠판 다크
+            </button>
+            <button class="style-picker-btn" data-style="sticky">
+              <span class="style-swatch swatch-sticky"></span>
+              포스트잇
+            </button>
+            <button class="style-picker-btn" data-style="blue">
+              <span class="style-swatch swatch-blue"></span>
+              클래스 블루
+            </button>
+            <button class="style-picker-btn" data-style="hint">
+              <span class="style-swatch swatch-hint"></span>
+              교사 힌트(블러)
+            </button>
+          </div>
+        </div>
+
+        <!-- 마스크 목록 -->
+        <div class="section-card" style="flex: 1; display: flex; flex-direction: column;">
+          <div class="section-card-title">
+            <span>마스크 순번 목록</span>
+            <button id="clearAllMasksBtn" class="btn btn-danger btn-sm" title="현재 페이지의 모든 마스크를 삭제합니다">전체 삭제</button>
+          </div>
+          <div id="maskListContainer" class="mask-list">
+            <!-- 동적으로 채워짐 -->
+            <div class="mask-list-empty">
+              화면 위를 마우스로 드래그하여<br>가리고 싶은 부분을 지정하세요.
+            </div>
+          </div>
+        </div>
+
+        <!-- 사전 준비 저장 & 불러오기 -->
+        <div class="section-card">
+          <div class="section-card-title">수업 준비 데이터 관리</div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button id="exportJsonBtn" class="btn btn-sm" style="flex: 1;" title="설정한 가림판 위치를 JSON 파일로 저장합니다">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              설정 저장
+            </button>
+            <button id="importJsonBtn" class="btn btn-sm" style="flex: 1;" title="저장해 둔 가림판 JSON 설정을 불러옵니다">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              불러오기
+            </button>
+            <input type="file" id="jsonFileInput" accept=".json" style="display: none;">
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 중앙 메인 뷰포트 -->
+    <main id="viewportContainer" class="viewport-container mode-draw">
+      <!-- PDF 다중 페이지 탐색 바 (PDF 열었을 때만 활성화) -->
+      <div id="pdfNavBar" class="page-nav-bar" style="display: none;">
+        <button id="prevPageBtn" class="btn btn-icon-only btn-sm" title="이전 페이지 (PageUp)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <span id="pageIndicator" class="page-indicator">1 / 1</span>
+        <button id="nextPageBtn" class="btn btn-icon-only btn-sm" title="다음 페이지 (PageDown)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+
+      <!-- 캔버스 및 오버레이 래퍼 -->
+      <div id="canvasWrapper" class="canvas-wrapper">
+        <canvas id="renderCanvas"></canvas>
+        <div id="maskOverlay" class="mask-overlay">
+          <!-- 마스크 엘리먼트들이 동적으로 렌더링됨 -->
+        </div>
+      </div>
+
+      <!-- 하단 플로팅 수업 진행 컨트롤러 -->
+      <div id="presentationBar" class="presentation-bar">
+        <button id="prevRevealBtn" class="btn" title="이전 가림판 다시 가리기 (←)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          이전 <span class="key-hint">←</span>
+        </button>
+
+        <div class="progress-info">
+          <div class="progress-text">
+            <span>진행 상황</span>
+            <span id="progressRatioText">0 / 0</span>
+          </div>
+          <div class="progress-track">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+        </div>
+
+        <button id="nextRevealBtn" class="btn btn-primary" title="다음 순번 가림판 지우기 (Space / →)">
+          다음 가림판 공개
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+          <span class="key-hint" style="background: rgba(255,255,255,0.25); color: #fff;">Space</span>
+        </button>
+
+        <div class="divider"></div>
+
+        <button id="hideAllBtn" class="btn btn-sm" title="모든 가림판 다시 가리기 (R)">
+          다시 가리기 <span class="key-hint">R</span>
+        </button>
+        <button id="revealAllBtn" class="btn btn-sm" title="모든 가림판 한 번에 공개 (A)">
+          모두 공개 <span class="key-hint">A</span>
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- 단축키 및 도움말 모달 -->
+  <div id="helpModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">수업용 단축키 & 가이드</div>
+        <button id="closeHelpBtn" class="btn btn-icon-only btn-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <table class="shortcut-table">
+          <tr>
+            <td><span class="shortcut-key-badge">Space</span> 또는 <span class="shortcut-key-badge">→</span></td>
+            <td>다음 순번 가림판 부드럽게 지우기 (정답/내용 공개)</td>
+          </tr>
+          <tr>
+            <td><span class="shortcut-key-badge">←</span></td>
+            <td>방금 공개한 가림판 다시 가리기 (복구)</td>
+          </tr>
+          <tr>
+            <td><span class="shortcut-key-badge">R</span></td>
+            <td>모든 가림판 다시 가리기 (처음 상태로 리셋)</td>
+          </tr>
+          <tr>
+            <td><span class="shortcut-key-badge">A</span></td>
+            <td>모든 가림판 한 번에 전체 공개</td>
+          </tr>
+          <tr>
+            <td><span class="shortcut-key-badge">가림판 직접 클릭</span></td>
+            <td>순서와 상관없이 해당 가림판 즉시 지우기/가리기</td>
+          </tr>
+          <tr>
+            <td><span class="shortcut-key-badge">F</span> / <span class="shortcut-key-badge">F11</span></td>
+            <td>전체화면 모드 토글 (빔프로젝터/전자칠판용)</td>
+          </tr>
+          <tr>
+            <td><span class="shortcut-key-badge">PageUp / PageDown</span></td>
+            <td>PDF 문서 이전 / 다음 페이지 이동</td>
+          </tr>
+        </table>
+        <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+          💡 <strong>Tip</strong>: 가림판을 미리 생성한 후 <strong>"설정 저장"</strong> 버튼을 누르면 JSON 파일로 보관할 수 있어, 다음 수업 시간에 바로 불러와 활용할 수 있습니다.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 토스트 알림 컨테이너 -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- 애플리케이션 스크립트 -->
+  <script src="app.js"></script>
+</body>
+</html>
