@@ -148,17 +148,30 @@ class MaskingRemoverApp {
     this.uploadBtn.addEventListener('click', () => this.fileInput.click());
     this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
 
-    // 드래그 앤 드롭 파일 로딩
+    // 드래그 앤 드롭 파일 로딩 (외부 OS 파일 드래그 시에만 파일 드롭 오버레이 활성화)
     window.addEventListener('dragover', (e) => {
+      // 내부 마스크 순서 변경 드래그 중인 경우 파일 드롭 오버레이 절대 띄우지 않음
+      if (this.draggedMaskRowId) return;
+
+      const types = e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
+      if (!types.includes('Files')) return;
+
       e.preventDefault();
       this.dragDropOverlay.classList.add('active');
     });
+
     window.addEventListener('dragleave', (e) => {
-      if (e.relatedTarget === null) {
+      if (e.relatedTarget === null || e.clientX <= 0 || e.clientY <= 0) {
         this.dragDropOverlay.classList.remove('active');
       }
     });
+
     window.addEventListener('drop', (e) => {
+      if (this.draggedMaskRowId) return;
+
+      const types = e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
+      if (!types.includes('Files')) return;
+
       e.preventDefault();
       this.dragDropOverlay.classList.remove('active');
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
@@ -288,6 +301,25 @@ class MaskingRemoverApp {
     this.zoom = Math.max(0.2, Math.min(3.0, Math.round(value * 100) / 100));
     this.canvasWrapper.style.transform = `scale(${this.zoom})`;
     this.zoomLevelText.textContent = `${Math.round(this.zoom * 100)}%`;
+
+    // 줌 배율(scale) 적용 시 브라우저 스크롤 영역이 잘리지 않도록 동적 마진 확보
+    const baseHeight = this.renderCanvas.height || 720;
+    const baseWidth = this.renderCanvas.width || 1000;
+    const scaledHeight = baseHeight * this.zoom;
+    const scaledWidth = baseWidth * this.zoom;
+
+    const extraHeight = Math.max(0, scaledHeight - baseHeight);
+    const extraWidth = Math.max(0, scaledWidth - baseWidth);
+
+    // 하단에 넉넉한 여백(extraHeight + 100px)을 부여하여 문서 맨 아래 끝까지 시원하게 스크롤 보장
+    this.canvasWrapper.style.marginBottom = `${extraHeight + 100}px`;
+    if (extraWidth > 0) {
+      this.canvasWrapper.style.marginLeft = `${extraWidth / 2}px`;
+      this.canvasWrapper.style.marginRight = `${extraWidth / 2}px`;
+    } else {
+      this.canvasWrapper.style.marginLeft = '0px';
+      this.canvasWrapper.style.marginRight = '0px';
+    }
   }
 
   fitToWidth() {
@@ -1054,6 +1086,7 @@ class MaskingRemoverApp {
       row.addEventListener('dragend', () => {
         row.classList.remove('is-dragging');
         this.draggedMaskRowId = null;
+        this.dragDropOverlay.classList.remove('active');
         this.maskListContainer.querySelectorAll('.mask-item-row').forEach(r => {
           r.classList.remove('drag-over-top', 'drag-over-bottom', 'is-dragging');
         });
