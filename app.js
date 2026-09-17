@@ -864,14 +864,15 @@ class MaskingRemoverApp {
       el.setAttribute('data-id', mask.id);
       el.title = mask.text ? `#${mask.order} - ${mask.text} (더블클릭하여 수정)` : `가림판 #${mask.order} (더블클릭하여 텍스트/힌트 입력)`;
 
-      // 마스크 내용 컨테이너 (항상 왼쪽 정렬: 순번 배지 + 텍스트)
-      const content = document.createElement('div');
-      content.className = 'mask-content';
-
+      // 순번 배지 (마스킹 상단 외부에 뱃지 형태로 표시하여 내부 필기 공간 100% 확보)
       const badge = document.createElement('div');
       badge.className = 'mask-badge';
       badge.textContent = mask.order;
-      content.appendChild(badge);
+      el.appendChild(badge);
+
+      // 마스크 내용 컨테이너 (힌트/메모 텍스트가 있을 때 표시)
+      const content = document.createElement('div');
+      content.className = 'mask-content';
 
       if (mask.text && mask.text.trim()) {
         const textSpan = document.createElement('span');
