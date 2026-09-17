@@ -475,8 +475,7 @@ body.is-fullscreen .main-layout {
 
 #renderCanvas {
   display: block;
-  max-width: 100%;
-  height: auto;
+  user-select: none;
 }
 
 /* 마스킹 오버레이 레이어 */

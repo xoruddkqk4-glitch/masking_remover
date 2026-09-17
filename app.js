@@ -71,6 +71,7 @@ class MaskingRemoverApp {
     this.zoomOutBtn = document.getElementById('zoomOutBtn');
     this.zoomResetBtn = document.getElementById('zoomResetBtn');
     this.zoomLevelText = document.getElementById('zoomLevelText');
+    this.fitPageBtn = document.getElementById('fitPageBtn');
     this.fitWidthBtn = document.getElementById('fitWidthBtn');
     this.fullscreenBtn = document.getElementById('fullscreenBtn');
     this.helpBtn = document.getElementById('helpBtn');
@@ -183,9 +184,10 @@ class MaskingRemoverApp {
     this.zoomInBtn.addEventListener('click', () => this.setZoom(this.zoom + 0.15));
     this.zoomOutBtn.addEventListener('click', () => this.setZoom(this.zoom - 0.15));
     this.zoomResetBtn.addEventListener('click', () => this.setZoom(1.0));
+    this.fitPageBtn.addEventListener('click', () => this.fitToPage());
     this.fitWidthBtn.addEventListener('click', () => this.fitToWidth());
 
-    // 전체화면 및 자동 가로 맞춤
+    // 전체화면 및 자동 화면 전체 맞춤 (문서 상하좌우 잘림 방지)
     this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
     document.addEventListener('fullscreenchange', () => {
       const isFullscreen = !!document.fullscreenElement;
@@ -200,12 +202,12 @@ class MaskingRemoverApp {
           this.sidebar.classList.add('collapsed');
         }
       }
-      setTimeout(() => this.fitToWidth(), 100);
+      setTimeout(() => this.fitToPage(), 100);
     });
 
-    // 창 크기 조절 시 가로 맞춤 유지
+    // 창 크기 조절 시 화면 전체 맞춤 동기화
     window.addEventListener('resize', () => {
-      this.fitToWidth();
+      this.fitToPage();
     });
 
     // Ctrl + 마우스 휠을 이용한 화면 확대/축소
@@ -294,7 +296,18 @@ class MaskingRemoverApp {
       this.sidebar.classList.add('collapsed');
       this.showToast('수업 진행 모드: Space 또는 → 키로 순서대로 지웁니다.');
     }
-    requestAnimationFrame(() => this.fitToWidth());
+    requestAnimationFrame(() => this.fitToPage());
+  }
+
+  updateCanvasDimensions(w, h) {
+    this.renderCanvas.width = w;
+    this.renderCanvas.height = h;
+    this.renderCanvas.style.width = `${w}px`;
+    this.renderCanvas.style.height = `${h}px`;
+    this.canvasWrapper.style.width = `${w}px`;
+    this.canvasWrapper.style.height = `${h}px`;
+    this.maskOverlay.style.width = `${w}px`;
+    this.maskOverlay.style.height = `${h}px`;
   }
 
   setZoom(value) {
@@ -322,9 +335,23 @@ class MaskingRemoverApp {
     }
   }
 
+  fitToPage() {
+    if (!this.renderCanvas.width || !this.renderCanvas.height) return;
+    // 가로/세로 여백 40px 확보하여 문서 테두리 그림자까지 잘림 없이 표시
+    const availableWidth = Math.max(100, this.viewportContainer.clientWidth - 48);
+    const availableHeight = Math.max(100, this.viewportContainer.clientHeight - 48);
+
+    const scaleX = availableWidth / this.renderCanvas.width;
+    const scaleY = availableHeight / this.renderCanvas.height;
+
+    // 가로/세로 중 화면 안에 100% 들어오도록 작은 배율 선택 (문서 상하좌우 완전 노출)
+    const fitZoom = Math.min(scaleX, scaleY);
+    this.setZoom(fitZoom);
+  }
+
   fitToWidth() {
     if (!this.renderCanvas.width) return;
-    const availableWidth = this.viewportContainer.clientWidth - 40;
+    const availableWidth = this.viewportContainer.clientWidth - 48;
     const canvasWidth = this.renderCanvas.width;
     if (availableWidth <= 0 || canvasWidth <= 0) return;
     const calculatedZoom = availableWidth / canvasWidth;
@@ -459,7 +486,7 @@ class MaskingRemoverApp {
         }
 
         this.renderImage(img);
-        this.fitToWidth();
+        this.fitToPage();
         this.renderMasks();
         this.updateUI();
         this.showToast(`이미지 로드 완료: ${file.name}`);
@@ -470,13 +497,11 @@ class MaskingRemoverApp {
   }
 
   renderImage(img) {
-    this.renderCanvas.width = img.naturalWidth || img.width;
-    this.renderCanvas.height = img.naturalHeight || img.height;
-    this.ctx.clearRect(0, 0, this.renderCanvas.width, this.renderCanvas.height);
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    this.updateCanvasDimensions(w, h);
+    this.ctx.clearRect(0, 0, w, h);
     this.ctx.drawImage(img, 0, 0);
-
-    this.maskOverlay.style.width = `${this.renderCanvas.width}px`;
-    this.maskOverlay.style.height = `${this.renderCanvas.height}px`;
   }
 
   async loadPdfFile(file) {
@@ -496,7 +521,7 @@ class MaskingRemoverApp {
 
       this.pdfNavBar.style.display = 'flex';
       await this.renderPdfPage(this.currentPage);
-      this.fitToWidth();
+      this.fitToPage();
       this.showToast(`PDF 로드 완료: ${file.name} (총 ${this.totalPages}페이지)`);
     } catch (err) {
       console.error('PDF 로드 실패:', err);
@@ -510,9 +535,10 @@ class MaskingRemoverApp {
       const page = await this.pdfDoc.getPage(pageNum);
       const viewport = page.getViewport({ scale: 1.5 });
 
-      this.renderCanvas.width = viewport.width;
-      this.renderCanvas.height = viewport.height;
-      this.ctx.clearRect(0, 0, viewport.width, viewport.height);
+      const w = viewport.width;
+      const h = viewport.height;
+      this.updateCanvasDimensions(w, h);
+      this.ctx.clearRect(0, 0, w, h);
 
       const renderContext = {
         canvasContext: this.ctx,
@@ -520,9 +546,6 @@ class MaskingRemoverApp {
       };
 
       await page.render(renderContext).promise;
-
-      this.maskOverlay.style.width = `${viewport.width}px`;
-      this.maskOverlay.style.height = `${viewport.height}px`;
 
       this.pageIndicator.textContent = `${this.currentPage} / ${this.totalPages}`;
       if (!this.pageMasks[this.currentPage]) {
@@ -549,10 +572,7 @@ class MaskingRemoverApp {
   loadSampleWorksheet() {
     const w = 1000;
     const h = 720;
-    this.renderCanvas.width = w;
-    this.renderCanvas.height = h;
-    this.maskOverlay.style.width = `${w}px`;
-    this.maskOverlay.style.height = `${h}px`;
+    this.updateCanvasDimensions(w, h);
 
     const c = this.ctx;
     c.fillStyle = '#ffffff';
@@ -693,7 +713,7 @@ class MaskingRemoverApp {
 
     this.renderMasks();
     this.updateUI();
-    this.fitToWidth();
+    this.fitToPage();
   }
 
   /* -------------------------------------------------------------
