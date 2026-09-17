@@ -281,53 +281,53 @@
           <!-- 마스크 엘리먼트들이 동적으로 렌더링됨 -->
         </div>
       </div>
-
-      <!-- 하단 플로팅 수업 진행 컨트롤러 (드래그 핸들 포함 & 슬림) -->
-      <div id="presentationBar" class="presentation-bar">
-        <!-- 드래그 그립 핸들 -->
-        <div id="barDragHandle" class="bar-drag-handle" title="드래그하여 원하는 위치로 이동">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
-            <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-            <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
-          </svg>
-        </div>
-
-        <button id="prevRevealBtn" class="btn" title="이전 가림판 다시 가리기 (←)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <polyline points="15 18 9 12 15 6"></polyline>
-          </svg>
-          이전 <span class="key-hint">←</span>
-        </button>
-
-        <div class="progress-info">
-          <div class="progress-text">
-            <span>진행 상황</span>
-            <span id="progressRatioText">0 / 0</span>
-          </div>
-          <div class="progress-track">
-            <div id="progressFill" class="progress-fill"></div>
-          </div>
-        </div>
-
-        <button id="nextRevealBtn" class="btn btn-primary" title="다음 순번 가림판 지우기 (Space / →)">
-          다음 가림판 공개
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <polyline points="9 18 15 12 9 6"></polyline>
-          </svg>
-          <span class="key-hint" style="background: rgba(255,255,255,0.25); color: #fff;">Space</span>
-        </button>
-
-        <div class="divider"></div>
-
-        <button id="hideAllBtn" class="btn btn-sm" title="모든 가림판 다시 가리기 (R)">
-          다시 가리기 <span class="key-hint">R</span>
-        </button>
-        <button id="revealAllBtn" class="btn btn-sm" title="모든 가림판 한 번에 공개 (A)">
-          모두 공개 <span class="key-hint">A</span>
-        </button>
-      </div>
     </main>
+
+    <!-- 상단 우측 고정 수업 진행 컨트롤러 (세로 스크롤과 무관하게 항상 상단 우측 고정) -->
+    <div id="presentationBar" class="presentation-bar">
+      <!-- 드래그 그립 핸들 -->
+      <div id="barDragHandle" class="bar-drag-handle" title="드래그하여 원하는 위치로 이동 (더블클릭 시 상단 우측 고정 위치 복귀)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+          <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+          <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+        </svg>
+      </div>
+
+      <button id="prevRevealBtn" class="btn" title="이전 가림판 다시 가리기 (←)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+        이전 <span class="key-hint">←</span>
+      </button>
+
+      <div class="progress-info">
+        <div class="progress-text">
+          <span>진행 상황</span>
+          <span id="progressRatioText">0 / 0</span>
+        </div>
+        <div class="progress-track">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+      </div>
+
+      <button id="nextRevealBtn" class="btn btn-primary" title="다음 순번 가림판 지우기 (Space / →)">
+        다음 가림판 공개
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+        <span class="key-hint" style="background: rgba(255,255,255,0.25); color: #fff;">Space</span>
+      </button>
+
+      <div class="divider"></div>
+
+      <button id="hideAllBtn" class="btn btn-sm" title="모든 가림판 다시 가리기 (R)">
+        다시 가리기 <span class="key-hint">R</span>
+      </button>
+      <button id="revealAllBtn" class="btn btn-sm" title="모든 가림판 한 번에 공개 (A)">
+        모두 공개 <span class="key-hint">A</span>
+      </button>
+    </div>
   </div>
 
   <!-- 단어 카드 포커스 모달 -->

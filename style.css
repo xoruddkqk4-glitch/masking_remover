@@ -221,9 +221,26 @@ body {
 }
 
 .sidebar.collapsed {
-  transform: translateX(-100%);
-  position: absolute;
-  height: 100%;
+  display: none !important;
+  width: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* 전체화면 모드에서 사이드바 완전 숨김 */
+:fullscreen .sidebar,
+:-webkit-full-screen .sidebar,
+body.is-fullscreen .sidebar {
+  display: none !important;
+  width: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+:fullscreen .main-layout,
+:-webkit-full-screen .main-layout,
+body.is-fullscreen .main-layout {
+  height: 100vh !important;
 }
 
 .sidebar-header {
@@ -332,20 +349,55 @@ body {
   line-height: 1.4;
 }
 
+/* 마스크 행 드래그 핸들 및 순서 변경 */
+.mask-row-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--text-muted);
+  padding: 0 3px;
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+  user-select: none;
+}
+
+.mask-row-drag-handle:hover {
+  color: var(--accent-primary);
+}
+
 .mask-item-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem;
+  padding: 0.45rem 0.65rem;
   background-color: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform 0.12s ease;
+  position: relative;
+  user-select: none;
 }
 
 .mask-item-row:hover {
   border-color: var(--border-hover);
   background-color: #273549;
+}
+
+.mask-item-row.is-dragging {
+  opacity: 0.35;
+  background-color: rgba(99, 102, 241, 0.15) !important;
+  border: 1px dashed var(--accent-primary) !important;
+}
+
+.mask-item-row.drag-over-top {
+  border-top: 2px solid #38bdf8 !important;
+  transform: translateY(2px);
+}
+
+.mask-item-row.drag-over-bottom {
+  border-bottom: 2px solid #38bdf8 !important;
+  transform: translateY(-2px);
 }
 
 .mask-item-row.is-revealed {
@@ -401,7 +453,7 @@ body {
   overflow: auto;
   align-items: center;
   justify-content: flex-start;
-  padding: 2rem;
+  padding: 1.25rem;
   cursor: default;
 }
 
@@ -576,12 +628,14 @@ body {
   display: flex;
 }
 
-/* 하단 수업 진행 플로팅 컨트롤러 (초슬림 & 드래그 이동 가능) */
+/* 상단 우측 수업 진행 고정 컨트롤러 (세로 스크롤과 무관하게 항상 상단 우측 고정) */
 .presentation-bar {
   position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 12px;
+  right: 24px;
+  bottom: auto;
+  left: auto;
+  transform: none;
   background-color: rgba(30, 41, 59, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -592,7 +646,7 @@ body {
   align-items: center;
   gap: 0.6rem;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
-  z-index: 80;
+  z-index: 90;
   transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
   white-space: nowrap !important;
   flex-wrap: nowrap !important;

@@ -30,6 +30,7 @@ class MaskingRemoverApp {
     this.isDrawing = false;
     this.drawStart = { x: 0, y: 0 };
     this.activeDrawingRect = null;
+    this.draggedMaskRowId = null;
 
     // 오디오 컨텍스트 (효과음용)
     this.audioCtx = null;
@@ -45,6 +46,9 @@ class MaskingRemoverApp {
 
     // 로컬 템플릿 보관함 목록 초기화
     this.initLocalPresets();
+
+    // 진행 상황 패널을 상단 우측(빨간 네모 박스 위치)으로 초기 고정
+    this.resetPresentationBarPosition();
   }
 
   /* -------------------------------------------------------------
@@ -137,6 +141,7 @@ class MaskingRemoverApp {
     // 사이드바 토글
     this.toggleSidebarBtn.addEventListener('click', () => {
       this.sidebar.classList.toggle('collapsed');
+      requestAnimationFrame(() => this.fitToWidth());
     });
 
     // 파일 업로드
@@ -170,10 +175,24 @@ class MaskingRemoverApp {
     // 전체화면 및 자동 가로 맞춤
     this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
     document.addEventListener('fullscreenchange', () => {
-      // 전체화면 진입 시 항상 가로 맞춤(Fit Width)을 기본 default로 설정
-      if (document.fullscreenElement) {
-        setTimeout(() => this.fitToWidth(), 150);
+      const isFullscreen = !!document.fullscreenElement;
+      if (isFullscreen) {
+        document.body.classList.add('is-fullscreen');
+        this.sidebar.classList.add('collapsed');
+      } else {
+        document.body.classList.remove('is-fullscreen');
+        if (this.mode === 'draw') {
+          this.sidebar.classList.remove('collapsed');
+        } else {
+          this.sidebar.classList.add('collapsed');
+        }
       }
+      setTimeout(() => this.fitToWidth(), 100);
+    });
+
+    // 창 크기 조절 시 가로 맞춤 유지
+    window.addEventListener('resize', () => {
+      this.fitToWidth();
     });
 
     // Ctrl + 마우스 휠을 이용한 화면 확대/축소
@@ -262,6 +281,7 @@ class MaskingRemoverApp {
       this.sidebar.classList.add('collapsed');
       this.showToast('수업 진행 모드: Space 또는 → 키로 순서대로 지웁니다.');
     }
+    requestAnimationFrame(() => this.fitToWidth());
   }
 
   setZoom(value) {
@@ -274,12 +294,15 @@ class MaskingRemoverApp {
     if (!this.renderCanvas.width) return;
     const availableWidth = this.viewportContainer.clientWidth - 40;
     const canvasWidth = this.renderCanvas.width;
+    if (availableWidth <= 0 || canvasWidth <= 0) return;
     const calculatedZoom = availableWidth / canvasWidth;
     this.setZoom(calculatedZoom);
   }
 
   toggleFullscreen() {
     if (!document.fullscreenElement) {
+      document.body.classList.add('is-fullscreen');
+      this.sidebar.classList.add('collapsed');
       document.documentElement.requestFullscreen().catch(() => {});
     } else {
       document.exitFullscreen().catch(() => {});
@@ -291,8 +314,16 @@ class MaskingRemoverApp {
     let startX = 0, startY = 0;
     let initialLeft = 0, initialTop = 0;
 
+    // 핸들 더블클릭 시 우측 하단 기본 고정 위치(빨간 네모 박스)로 초기화
+    if (this.barDragHandle) {
+      this.barDragHandle.addEventListener('dblclick', () => {
+        this.resetPresentationBarPosition();
+      });
+    }
+
     const onPointerDown = (e) => {
-      if (e.target.closest('button, input, select, a')) return;
+      // 드래그 핸들(#barDragHandle)을 잡고 끌 때만 이동 허용 (버튼 조작 시 의도치 않은 패널 이동 방지)
+      if (!e.target.closest('#barDragHandle')) return;
 
       isDragging = true;
       this.presentationBar.classList.add('is-dragging');
@@ -306,6 +337,7 @@ class MaskingRemoverApp {
 
       this.presentationBar.style.transform = 'none';
       this.presentationBar.style.bottom = 'auto';
+      this.presentationBar.style.right = 'auto';
       this.presentationBar.style.left = `${initialLeft}px`;
       this.presentationBar.style.top = `${initialTop}px`;
 
@@ -345,6 +377,14 @@ class MaskingRemoverApp {
     this.presentationBar.addEventListener('pointermove', onPointerMove);
     this.presentationBar.addEventListener('pointerup', onPointerUp);
     this.presentationBar.addEventListener('pointercancel', onPointerUp);
+  }
+
+  resetPresentationBarPosition() {
+    this.presentationBar.style.transform = 'none';
+    this.presentationBar.style.left = 'auto';
+    this.presentationBar.style.bottom = 'auto';
+    this.presentationBar.style.top = '12px';
+    this.presentationBar.style.right = '24px';
   }
 
   /* -------------------------------------------------------------
@@ -476,7 +516,7 @@ class MaskingRemoverApp {
    * ----------------------------------------------------------- */
   loadSampleWorksheet() {
     const w = 1000;
-    const h = 1350;
+    const h = 720;
     this.renderCanvas.width = w;
     this.renderCanvas.height = h;
     this.maskOverlay.style.width = `${w}px`;
@@ -488,91 +528,98 @@ class MaskingRemoverApp {
 
     // 상단 헤더 배너
     c.fillStyle = '#f1f5f9';
-    c.fillRect(40, 40, w - 80, 100);
+    c.fillRect(40, 20, w - 80, 70);
     c.strokeStyle = '#cbd5e1';
     c.lineWidth = 2;
-    c.strokeRect(40, 40, w - 80, 100);
+    c.strokeRect(40, 20, w - 80, 70);
 
     c.fillStyle = '#1e293b';
-    c.font = 'bold 30px "Pretendard", sans-serif';
-    c.fillText('📖 [수업 예시] 오늘의 핵심 단어 & 퀴즈', 70, 95);
+    c.font = 'bold 24px "Pretendard", sans-serif';
+    c.fillText('📖 [수업 예시] 오늘의 핵심 단어 & 퀴즈', 65, 55);
 
     c.fillStyle = '#64748b';
-    c.font = '16px "Pretendard", sans-serif';
-    c.fillText('가림판을 더블클릭하여 텍스트를 입력하거나, [단어 카드(C)]로 포커스 퀴즈를 진행해보세요!', 70, 125);
+    c.font = '14px "Pretendard", sans-serif';
+    c.fillText('가림판을 더블클릭하여 텍스트를 입력하거나, [단어 카드(C)]로 포커스 퀴즈를 진행해보세요!', 65, 76);
 
     // 문제 1: 과학 퀴즈
     c.fillStyle = '#0f172a';
-    c.font = 'bold 22px "Pretendard", sans-serif';
-    c.fillText('Q1. 빛이 직진하다가 다른 물질의 경계면에서 꺾이는 현상을 무엇이라고 할까요?', 60, 200);
+    c.font = 'bold 19px "Pretendard", sans-serif';
+    c.fillText('Q1. 빛이 직진하다가 다른 물질의 경계면에서 꺾이는 현상을 무엇이라고 할까요?', 50, 125);
 
-    c.font = '20px "Pretendard", sans-serif';
+    c.font = '17px "Pretendard", sans-serif';
     c.fillStyle = '#334155';
-    c.fillText('정답: [  빛의 굴절 현상 (Refraction)  ]', 80, 255);
-    c.fillText('설명: 매질에 따라 빛의 속력이 달라지기 때문에 발생합니다.', 80, 295);
+    c.fillText('정답: [  빛의 굴절 현상 (Refraction)  ]', 70, 162);
+    c.fillText('설명: 매질에 따라 빛의 속력이 달라지기 때문에 발생합니다.', 70, 190);
 
     // 구분선
     c.beginPath();
     c.strokeStyle = '#e2e8f0';
-    c.lineWidth = 2;
-    c.moveTo(60, 340);
-    c.lineTo(w - 60, 340);
+    c.lineWidth = 1.5;
+    c.moveTo(50, 215);
+    c.lineTo(w - 50, 215);
     c.stroke();
 
     // 문제 2: 영어 빈칸 채우기
     c.fillStyle = '#0f172a';
-    c.font = 'bold 22px "Pretendard", sans-serif';
-    c.fillText('Q2. 다음 문장의 빈칸에 들어갈 가장 알맞은 표현을 맞춰보세요.', 60, 400);
+    c.font = 'bold 19px "Pretendard", sans-serif';
+    c.fillText('Q2. 다음 문장의 빈칸에 들어갈 가장 알맞은 표현을 맞춰보세요.', 50, 248);
 
-    c.font = '20px "Pretendard", sans-serif';
+    c.font = '17px "Pretendard", sans-serif';
     c.fillStyle = '#334155';
-    c.fillText('Sentence: "Actions speak louder than [   words   ]."', 80, 455);
-    c.fillText('의미: 말보다 [   행동이나 실천   ]이 훨씬 더 중요하다.', 80, 495);
+    c.fillText('Sentence: "Actions speak louder than [   words   ]."', 70, 285);
+    c.fillText('의미: 말보다 [   행동이나 실천   ]이 훨씬 더 중요하다.', 70, 313);
 
     // 구분선
     c.beginPath();
-    c.moveTo(60, 545);
-    c.lineTo(w - 60, 545);
+    c.moveTo(50, 338);
+    c.lineTo(w - 50, 338);
     c.stroke();
 
     // 문제 3: 역사 & 상식
     c.fillStyle = '#0f172a';
-    c.font = 'bold 22px "Pretendard", sans-serif';
-    c.fillText('Q3. 조선 시대에 백성을 가르치는 바른 소리라는 뜻으로 창제된 글자는?', 60, 610);
+    c.font = 'bold 19px "Pretendard", sans-serif';
+    c.fillText('Q3. 조선 시대에 백성을 가르치는 바른 소리라는 뜻으로 창제된 글자는?', 50, 370);
 
-    c.font = '22px "Pretendard", sans-serif';
+    c.font = 'bold 18px "Pretendard", sans-serif';
     c.fillStyle = '#1e3a8a';
-    c.fillText('정답: [   훈민정음 (Hunminjeongeum)   ]', 80, 665);
+    c.fillText('정답: [   훈민정음 (Hunminjeongeum)   ]', 70, 407);
     c.fillStyle = '#334155';
-    c.font = '18px "Pretendard", sans-serif';
-    c.fillText('창제자: [  세종대왕 (King Sejong)  ], 1443년 창제', 80, 705);
+    c.font = '15px "Pretendard", sans-serif';
+    c.fillText('창제자: [  세종대왕 (King Sejong)  ], 1443년 창제', 70, 437);
 
-    // 하단 장식 카드
+    // 구분선
+    c.beginPath();
+    c.moveTo(50, 462);
+    c.lineTo(w - 50, 462);
+    c.stroke();
+
+    // 하단 장식 안내 카드
     c.fillStyle = '#f8fafc';
-    c.fillRect(60, 770, w - 120, 200);
+    c.fillRect(50, 482, w - 100, 205);
     c.strokeStyle = '#93c5fd';
     c.lineWidth = 1.5;
-    c.strokeRect(60, 770, w - 120, 200);
+    c.strokeRect(50, 482, w - 100, 205);
 
     c.fillStyle = '#2563eb';
-    c.font = 'bold 20px "Pretendard", sans-serif';
-    c.fillText('💡 Masking Remover 안내', 90, 815);
+    c.font = 'bold 17px "Pretendard", sans-serif';
+    c.fillText('💡 Masking Remover 핵심 활용 팁', 70, 515);
 
     c.fillStyle = '#475569';
-    c.font = '17px "Pretendard", sans-serif';
-    c.fillText('1. 마스킹 네모 박스를 더블클릭하면 힌트나 단어 텍스트를 바로 입력할 수 있습니다.', 90, 855);
-    c.fillText('2. 상단의 [단어 카드(C)]를 누르면 대형 플래시 카드 포커스 모드로 퀴즈를 진행합니다.', 90, 895);
-    c.fillText('3. Ctrl + 마우스 휠로 부드럽게 화면을 확대/축소하고, 전체화면(F) 시 자동으로 가로 맞춤됩니다.', 90, 935);
+    c.font = '14px "Pretendard", sans-serif';
+    c.fillText('1. 이미 생성된 마스킹 네모 박스는 마우스로 드래그하여 화면 원하는 곳으로 자유롭게 이동할 수 있습니다.', 70, 545);
+    c.fillText('2. 가림판을 더블클릭하여 텍스트를 입력하거나, 상단 [단어 카드(C)]로 2배 대형 플래시 카드 모드를 실행해보세요.', 70, 575);
+    c.fillText('3. Space / 방향키(→)로 다음 가림판을 순서대로 지우고, 전체화면(F) 시 사이드바가 숨겨지며 가로 맞춤됩니다.', 70, 605);
+    c.fillText('4. 교재 파일과 무관하게 왼쪽 패널의 [템플릿 보관함]을 이용해 가림판 구성을 저장하고 언제든 재사용할 수 있습니다.', 70, 635);
 
     // 기본 샘플 가림판 4개 등록 (텍스트 포함)
     this.pageMasks[1] = [
       {
         id: 'sample_mask_1',
         order: 1,
-        x: 135 / w,
-        y: 228 / h,
+        x: 120 / w,
+        y: 140 / h,
         w: 320 / w,
-        h: 40 / h,
+        h: 32 / h,
         style: 'slate',
         text: '빛의 굴절 현상 (Refraction)',
         isRevealed: false
@@ -580,10 +627,10 @@ class MaskingRemoverApp {
       {
         id: 'sample_mask_2',
         order: 2,
-        x: 345 / w,
-        y: 428 / h,
+        x: 322 / w,
+        y: 263 / h,
         w: 120 / w,
-        h: 40 / h,
+        h: 32 / h,
         style: 'sticky',
         text: 'words',
         isRevealed: false
@@ -591,10 +638,10 @@ class MaskingRemoverApp {
       {
         id: 'sample_mask_3',
         order: 3,
-        x: 140 / w,
-        y: 638 / h,
-        w: 350 / w,
-        h: 42 / h,
+        x: 125 / w,
+        y: 385 / h,
+        w: 330 / w,
+        h: 32 / h,
         style: 'blue',
         text: '훈민정음 (Hunminjeongeum)',
         isRevealed: false
@@ -602,10 +649,10 @@ class MaskingRemoverApp {
       {
         id: 'sample_mask_4',
         order: 4,
-        x: 155 / w,
-        y: 680 / h,
-        w: 240 / w,
-        h: 36 / h,
+        x: 135 / w,
+        y: 417 / h,
+        w: 220 / w,
+        h: 30 / h,
         style: 'hint',
         text: '세종대왕 (King Sejong)',
         isRevealed: false
@@ -917,9 +964,21 @@ class MaskingRemoverApp {
     masks.forEach((mask) => {
       const row = document.createElement('div');
       row.className = `mask-item-row ${mask.isRevealed ? 'is-revealed' : ''}`;
+      row.setAttribute('draggable', 'true');
+      row.setAttribute('data-id', mask.id);
 
       row.innerHTML = `
-        <div class="mask-info" style="flex: 1; overflow: hidden;">
+        <div class="mask-row-drag-handle" title="마우스로 끌어서 순서 변경">
+          <svg width="12" height="14" viewBox="0 0 24 24" fill="currentColor" style="display: block; opacity: 0.7;">
+            <circle cx="9" cy="5" r="2.5"></circle>
+            <circle cx="15" cy="5" r="2.5"></circle>
+            <circle cx="9" cy="12" r="2.5"></circle>
+            <circle cx="15" cy="12" r="2.5"></circle>
+            <circle cx="9" cy="19" r="2.5"></circle>
+            <circle cx="15" cy="19" r="2.5"></circle>
+          </svg>
+        </div>
+        <div class="mask-info" style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 0.4rem;">
           <div class="mask-num-badge">${mask.order}</div>
           <input type="text" class="mask-text-input" placeholder="힌트/단어 입력" value="${mask.text ? mask.text.replace(/"/g, '&quot;') : ''}">
         </div>
@@ -949,6 +1008,57 @@ class MaskingRemoverApp {
       });
       textInput.addEventListener('keydown', (e) => e.stopPropagation());
 
+      // 드래그 앤 드롭 순서 변경 이벤트
+      row.addEventListener('dragstart', (e) => {
+        // 인풋이나 버튼 조작 중에는 드래그 방지
+        if (e.target.tagName === 'INPUT' || e.target.closest('button, input')) {
+          e.preventDefault();
+          return;
+        }
+        this.draggedMaskRowId = mask.id;
+        row.classList.add('is-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', mask.id);
+      });
+
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+          row.classList.add('drag-over-top');
+          row.classList.remove('drag-over-bottom');
+        } else {
+          row.classList.add('drag-over-bottom');
+          row.classList.remove('drag-over-top');
+        }
+      });
+
+      row.addEventListener('dragleave', () => {
+        row.classList.remove('drag-over-top', 'drag-over-bottom');
+      });
+
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        row.classList.remove('drag-over-top', 'drag-over-bottom');
+        const fromId = this.draggedMaskRowId || e.dataTransfer.getData('text/plain');
+        const toId = mask.id;
+        if (!fromId || fromId === toId) return;
+
+        const rect = row.getBoundingClientRect();
+        const insertBefore = e.clientY < (rect.top + rect.height / 2);
+        this.reorderMasks(fromId, toId, insertBefore);
+      });
+
+      row.addEventListener('dragend', () => {
+        row.classList.remove('is-dragging');
+        this.draggedMaskRowId = null;
+        this.maskListContainer.querySelectorAll('.mask-item-row').forEach(r => {
+          r.classList.remove('drag-over-top', 'drag-over-bottom', 'is-dragging');
+        });
+      });
+
       // 단어 카드 버튼
       row.querySelector('.card-row-btn').addEventListener('click', () => {
         const index = masks.findIndex(m => m.id === mask.id);
@@ -967,6 +1077,34 @@ class MaskingRemoverApp {
 
       this.maskListContainer.appendChild(row);
     });
+  }
+
+  reorderMasks(fromId, toId, insertBefore = true) {
+    const masks = this.getCurrentMasks();
+    const fromIndex = masks.findIndex(m => m.id === fromId);
+    if (fromIndex === -1) return;
+
+    const [movedItem] = masks.splice(fromIndex, 1);
+    let toIndex = masks.findIndex(m => m.id === toId);
+    if (toIndex === -1) {
+      masks.push(movedItem);
+    } else {
+      if (!insertBefore) {
+        toIndex += 1;
+      }
+      masks.splice(toIndex, 0, movedItem);
+    }
+
+    // 새로운 순서에 따라 order(1, 2, 3...) 속성 재부여
+    masks.forEach((m, idx) => {
+      m.order = idx + 1;
+    });
+
+    this.renderMasks();
+    this.renderSidebarList();
+    this.updateUI();
+    if (this.isWordCardOpen) this.renderWordCard();
+    this.showToast(`가림판 순서가 재배치되었습니다. (① ~ ⑤)`);
   }
 
   /* -------------------------------------------------------------
