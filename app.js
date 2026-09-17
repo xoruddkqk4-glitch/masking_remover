@@ -128,6 +128,14 @@ class MaskingRemoverApp {
     this.closeHelpBtn = document.getElementById('closeHelpBtn');
     this.dragDropOverlay = document.getElementById('dragDropOverlay');
     this.toastContainer = document.getElementById('toastContainer');
+
+    // 학생용 유인물 인쇄 & PDF 저장 모달 요소
+    this.printHandoutBtn = document.getElementById('printHandoutBtn');
+    this.printModal = document.getElementById('printModal');
+    this.closePrintBtn = document.getElementById('closePrintBtn');
+    this.downloadPdfDirectBtn = document.getElementById('downloadPdfDirectBtn');
+    this.printBrowserDialogBtn = document.getElementById('printBrowserDialogBtn');
+    this.maskAllForPrintCheckbox = document.getElementById('maskAllForPrintCheckbox');
   }
 
   /* -------------------------------------------------------------
@@ -268,6 +276,25 @@ class MaskingRemoverApp {
     this.helpModal.addEventListener('click', (e) => {
       if (e.target === this.helpModal) this.helpModal.classList.remove('open');
     });
+
+    // 학생용 유인물 인쇄 & PDF 모달 이벤트
+    if (this.printHandoutBtn) {
+      this.printHandoutBtn.addEventListener('click', () => this.openPrintHandoutModal());
+    }
+    if (this.closePrintBtn) {
+      this.closePrintBtn.addEventListener('click', () => this.closePrintHandoutModal());
+    }
+    if (this.downloadPdfDirectBtn) {
+      this.downloadPdfDirectBtn.addEventListener('click', () => this.exportStudentPdf());
+    }
+    if (this.printBrowserDialogBtn) {
+      this.printBrowserDialogBtn.addEventListener('click', () => this.printHandout());
+    }
+    if (this.printModal) {
+      this.printModal.addEventListener('click', (e) => {
+        if (e.target === this.printModal) this.closePrintHandoutModal();
+      });
+    }
 
     // 키보드 단축키
     window.addEventListener('keydown', (e) => this.handleKeyDown(e));
@@ -670,7 +697,7 @@ class MaskingRemoverApp {
     c.fillText('3. Space / 방향키(→)로 다음 가림판을 순서대로 지우고, 전체화면(F) 시 사이드바가 숨겨지며 가로 맞춤됩니다.', 70, 589);
     c.fillText('4. 교재 파일과 무관하게 왼쪽 패널의 [템플릿 보관함]을 이용해 가림판 구성을 저장하고 언제든 재사용할 수 있습니다.', 70, 617);
 
-    // 기본 샘플 가림판 4개 등록 (텍스트 포함)
+    // 기본 샘플 가림판 4개 등록 (기본값: 순서 번호만 표시)
     this.pageMasks[1] = [
       {
         id: 'sample_mask_1',
@@ -680,7 +707,7 @@ class MaskingRemoverApp {
         w: 320 / w,
         h: 32 / h,
         style: 'slate',
-        text: '빛의 굴절 현상 (Refraction)',
+        text: '', // 기본값: 순서 번호만 표시
         isRevealed: false
       },
       {
@@ -691,7 +718,7 @@ class MaskingRemoverApp {
         w: 120 / w,
         h: 32 / h,
         style: 'sticky',
-        text: 'words',
+        text: '', // 기본값: 순서 번호만 표시
         isRevealed: false
       },
       {
@@ -702,7 +729,7 @@ class MaskingRemoverApp {
         w: 330 / w,
         h: 32 / h,
         style: 'blue',
-        text: '훈민정음 (Hunminjeongeum)',
+        text: '', // 기본값: 순서 번호만 표시
         isRevealed: false
       },
       {
@@ -713,7 +740,7 @@ class MaskingRemoverApp {
         w: 220 / w,
         h: 30 / h,
         style: 'hint',
-        text: '세종대왕 (King Sejong)',
+        text: '', // 기본값: 순서 번호만 표시
         isRevealed: false
       }
     ];
@@ -833,9 +860,9 @@ class MaskingRemoverApp {
       el.style.width = `${(mask.w * 100).toFixed(3)}%`;
       el.style.height = `${(mask.h * 100).toFixed(3)}%`;
       el.setAttribute('data-id', mask.id);
-      el.title = mask.text ? `${mask.text} (더블클릭하여 수정)` : '더블클릭하여 텍스트/힌트 입력';
+      el.title = mask.text ? `#${mask.order} - ${mask.text} (더블클릭하여 수정)` : `가림판 #${mask.order} (더블클릭하여 텍스트/힌트 입력)`;
 
-      // 마스크 내용 컨테이너 (번호 배지 + 텍스트)
+      // 마스크 내용 컨테이너 (항상 왼쪽 정렬: 순번 배지 + 텍스트)
       const content = document.createElement('div');
       content.className = 'mask-content';
 
@@ -844,7 +871,7 @@ class MaskingRemoverApp {
       badge.textContent = mask.order;
       content.appendChild(badge);
 
-      if (mask.text) {
+      if (mask.text && mask.text.trim()) {
         const textSpan = document.createElement('span');
         textSpan.className = 'mask-text';
         textSpan.textContent = mask.text;
@@ -1039,7 +1066,7 @@ class MaskingRemoverApp {
         </div>
         <div class="mask-info" style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 0.4rem;">
           <div class="mask-num-badge">${mask.order}</div>
-          <input type="text" class="mask-text-input" placeholder="힌트/단어 입력" value="${mask.text ? mask.text.replace(/"/g, '&quot;') : ''}">
+          <input type="text" class="mask-text-input" placeholder="순번 #${mask.order} (텍스트 없음)" value="${mask.text ? mask.text.replace(/"/g, '&quot;') : ''}">
         </div>
         <div class="mask-actions">
           <button class="btn btn-sm btn-icon-only card-row-btn" title="단어 카드로 보기">
@@ -1210,27 +1237,27 @@ class MaskingRemoverApp {
     this.wordCardProgress.textContent = `${this.currentCardIndex + 1} / ${masks.length}`;
     this.wordCardNum.textContent = mask.order;
 
-    // 텍스트 내용 반영
+    // 텍스트 내용 반영 (하단 힌트 영역)
     if (mask.text && mask.text.trim().length > 0) {
       this.wordCardText.textContent = mask.text;
       this.wordCardText.classList.remove('empty');
     } else {
-      this.wordCardText.textContent = '(입력된 힌트/단어가 없습니다)';
+      this.wordCardText.textContent = '(등록된 힌트/메모가 없습니다)';
       this.wordCardText.classList.add('empty');
     }
 
-    // 캔버스 원본 크롭 렌더링
+    // 캔버스 원본 크롭 렌더링 (대형 고화질 렌더링)
     this.renderWordCardCrop(mask);
 
     // 가림 / 공개 상태 텍스트 힌트 갱신
     if (mask.isRevealed) {
       this.wordCardCropCanvas.classList.remove('is-masked');
-      this.wordCardStateHint.innerHTML = '<span style="color: #10b981;">👁️ 정답/내용 공개됨 (클릭 시 다시 가림)</span>';
+      this.wordCardStateHint.innerHTML = '<span style="color: #10b981;">👁️ 정답 공개됨 (클릭/Enter 시 다시 가림)</span>';
       this.toggleWordCardBtn.textContent = '다시 가리기';
     } else {
       this.wordCardCropCanvas.classList.add('is-masked');
       this.wordCardStateHint.innerHTML = '<span style="color: #38bdf8;">🔒 가림 상태 (클릭 또는 Enter로 공개)</span>';
-      this.toggleWordCardBtn.textContent = '내용 공개';
+      this.toggleWordCardBtn.textContent = '정답 공개';
     }
 
     // 이전/다음 버튼 활성/비활성 제어
@@ -1246,15 +1273,41 @@ class MaskingRemoverApp {
     const cropW = Math.max(1, Math.round(mask.w * this.renderCanvas.width));
     const cropH = Math.max(1, Math.round(mask.h * this.renderCanvas.height));
 
-    this.wordCardCropCanvas.width = cropW;
-    this.wordCardCropCanvas.height = cropH;
+    // 정답 캔버스를 화면에 시원하고 크게 확대 표시하기 위한 최적 스케일 계산
+    const maxDisplayW = Math.min(960, window.innerWidth * 0.78);
+    const maxDisplayH = 260;
 
-    this.wordCardCropCtx.clearRect(0, 0, cropW, cropH);
+    // 기본적으로 높이 기준 2.8x~3.5x 확대를 목표로 설정하여 정답이 크고 뚜렷하게 보이도록 함
+    let scale = Math.max(2.4, Math.min(4.5, 140 / cropH));
+    if (cropW * scale > maxDisplayW) {
+      scale = maxDisplayW / cropW;
+    }
+    if (cropH * scale > maxDisplayH) {
+      scale = maxDisplayH / cropH;
+    }
+    scale = Math.max(scale, 1.8); // 최소 1.8배 이상 확대
+
+    const displayW = Math.round(cropW * scale);
+    const displayH = Math.round(cropH * scale);
+
+    // 고해상도(Retina 2x) 선명도 적용
+    const dpr = Math.max(2, window.devicePixelRatio || 2);
+    this.wordCardCropCanvas.width = Math.round(displayW * dpr);
+    this.wordCardCropCanvas.height = Math.round(displayH * dpr);
+    this.wordCardCropCanvas.style.width = `${displayW}px`;
+    this.wordCardCropCanvas.style.height = `${displayH}px`;
+
+    this.wordCardCropCtx.save();
+    this.wordCardCropCtx.scale(dpr, dpr);
+    this.wordCardCropCtx.imageSmoothingEnabled = true;
+    this.wordCardCropCtx.imageSmoothingQuality = 'high';
+    this.wordCardCropCtx.clearRect(0, 0, displayW, displayH);
     this.wordCardCropCtx.drawImage(
       this.renderCanvas,
       cropX, cropY, cropW, cropH,
-      0, 0, cropW, cropH
+      0, 0, displayW, displayH
     );
+    this.wordCardCropCtx.restore();
   }
 
   nextWordCard() {
@@ -1473,6 +1526,13 @@ class MaskingRemoverApp {
       return;
     }
 
+    // Ctrl + P: 학생용 유인물 인쇄 및 PDF 저장 모달 단축키
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+      e.preventDefault();
+      this.openPrintHandoutModal();
+      return;
+    }
+
     // 2. 기본 화면 단축키
     switch (e.code) {
       case 'Space':
@@ -1510,6 +1570,7 @@ class MaskingRemoverApp {
         break;
       case 'Escape':
         this.helpModal.classList.remove('open');
+        if (this.printModal) this.closePrintHandoutModal();
         break;
     }
   }
@@ -1656,7 +1717,173 @@ class MaskingRemoverApp {
   }
 
   /* -------------------------------------------------------------
-   * 13. 유틸리티 (오디오 톤 & 토스트)
+   * 13. 학생용 유인물 인쇄 & PDF 직접 저장 엔진
+   * ----------------------------------------------------------- */
+  openPrintHandoutModal() {
+    if (this.printModal) {
+      this.printModal.classList.add('open');
+    }
+  }
+
+  closePrintHandoutModal() {
+    if (this.printModal) {
+      this.printModal.classList.remove('open');
+    }
+  }
+
+  async exportStudentPdf() {
+    this.showToast('학생용 유인물 PDF를 생성 중입니다...');
+    try {
+      const offscreen = document.createElement('canvas');
+      const w = this.renderCanvas.width;
+      const h = this.renderCanvas.height;
+      if (!w || !h) {
+        this.showToast('인쇄할 문서가 준비되지 않았습니다.', 'error');
+        return;
+      }
+
+      offscreen.width = w;
+      offscreen.height = h;
+      const ctx = offscreen.getContext('2d');
+
+      // 1. 원본 캔버스 복사
+      ctx.drawImage(this.renderCanvas, 0, 0);
+
+      // 2. 마스킹 가림판(빈칸) 합성
+      const masks = this.getCurrentMasks();
+      const maskAll = this.maskAllForPrintCheckbox ? this.maskAllForPrintCheckbox.checked : true;
+
+      masks.forEach((mask) => {
+        // '모든 가림판 가리기' 옵션이 해제된 경우에만 이미 공개된 마스크 건너뜀
+        if (!maskAll && mask.isRevealed) return;
+
+        const mx = mask.x * w;
+        const my = mask.y * h;
+        const mw = mask.w * w;
+        const mh = mask.h * h;
+
+        ctx.save();
+
+        // 학생용 유인물 빈칸 박스 (깔끔한 테두리와 음영)
+        ctx.fillStyle = mask.style === 'sticky' ? '#fef9c3' : (mask.style === 'blue' ? '#eff6ff' : '#f8fafc');
+        ctx.fillRect(mx, my, mw, mh);
+
+        ctx.strokeStyle = mask.style === 'sticky' ? '#ca8a04' : (mask.style === 'blue' ? '#2563eb' : '#334155');
+        ctx.lineWidth = Math.max(1.5, Math.min(3, Math.round(mh * 0.06)));
+        ctx.strokeRect(mx, my, mw, mh);
+
+        // 왼쪽 정렬 번호 배지 & 텍스트 렌더링
+        const fontSize = Math.max(11, Math.min(22, Math.round(mh * 0.55)));
+        ctx.font = `bold ${fontSize}px "Pretendard", -apple-system, sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+
+        const badgeW = Math.max(20, Math.round(fontSize * 1.5));
+        const badgeH = Math.max(18, Math.round(fontSize * 1.3));
+        const badgeX = mx + Math.max(6, Math.round(mw * 0.02));
+        const badgeY = my + (mh - badgeH) / 2;
+
+        // 배지 배경
+        ctx.fillStyle = mask.style === 'sticky' ? '#ca8a04' : (mask.style === 'blue' ? '#2563eb' : '#334155');
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
+          ctx.fill();
+        } else {
+          ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+        }
+
+        // 배지 숫자 (배지 사각형 중심)
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(mask.order), badgeX + badgeW / 2, badgeY + badgeH / 2 + 1);
+
+        // 추가 힌트/텍스트가 등록되어 있을 경우 왼쪽에 순차 배치
+        if (mask.text && mask.text.trim()) {
+          ctx.textAlign = 'left';
+          ctx.fillStyle = mask.style === 'sticky' ? '#713f12' : '#0f172a';
+          const textStartX = badgeX + badgeW + 8;
+          const maxTextW = Math.max(20, mx + mw - textStartX - 6);
+          ctx.fillText(mask.text, textStartX, my + mh / 2, maxTextW);
+        }
+
+        ctx.restore();
+      });
+
+      // 3. jsPDF 라이브러리를 통한 고품질 PDF 생성
+      if (window.jspdf && window.jspdf.jsPDF) {
+        const { jsPDF } = window.jspdf;
+        const isLandscape = w > h;
+        // 포인트(pt) 단위 변환 (픽셀의 75%)
+        const pdfW = w * 0.75;
+        const pdfH = h * 0.75;
+
+        const pdf = new jsPDF({
+          orientation: isLandscape ? 'landscape' : 'portrait',
+          unit: 'pt',
+          format: [pdfW, pdfH]
+        });
+
+        const imgData = offscreen.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
+        const fileName = `학생용_유인물_p${this.currentPage}.pdf`;
+        pdf.save(fileName);
+        this.showToast(`학생용 유인물 PDF 다운로드 완료: ${fileName}`);
+      } else {
+        // 라이브러리 미지원 시 고화질 이미지 다운로드 지원
+        const link = document.createElement('a');
+        link.download = `학생용_유인물_p${this.currentPage}.png`;
+        link.href = offscreen.toDataURL('image/png');
+        link.click();
+        this.showToast(`학생용 유인물 이미지 저장 완료 (${link.download})`);
+      }
+      this.closePrintHandoutModal();
+    } catch (err) {
+      console.error('PDF 생성 실패:', err);
+      this.showToast('PDF 파일 생성 중 오류가 발생했습니다. 브라우저 인쇄를 이용해주세요.', 'error');
+    }
+  }
+
+  printHandout() {
+    this.closePrintHandoutModal();
+    const prevZoom = this.zoom;
+
+    // 모든 가림판 가리기 옵션 처리
+    const maskAll = this.maskAllForPrintCheckbox ? this.maskAllForPrintCheckbox.checked : true;
+    const originalRevealedState = {};
+
+    if (maskAll) {
+      this.getCurrentMasks().forEach(m => {
+        originalRevealedState[m.id] = m.isRevealed;
+        m.isRevealed = false;
+      });
+      this.renderMasks();
+    }
+
+    // 인쇄 전 캔버스 줌 배율 일시 초기화 (A4 용지 맞춤 인쇄 보장)
+    this.canvasWrapper.style.transform = 'none';
+    this.canvasWrapper.style.margin = '0 auto';
+
+    setTimeout(() => {
+      window.print();
+      // 인쇄 완료 후 원래 줌 및 가림판 상태 원상 복구
+      setTimeout(() => {
+        this.setZoom(prevZoom);
+        if (maskAll) {
+          this.getCurrentMasks().forEach(m => {
+            if (originalRevealedState[m.id] !== undefined) {
+              m.isRevealed = originalRevealedState[m.id];
+            }
+          });
+          this.renderMasks();
+          this.updateUI();
+        }
+      }, 600);
+    }, 150);
+  }
+
+  /* -------------------------------------------------------------
+   * 14. 유틸리티 (오디오 톤 & 토스트)
    * ----------------------------------------------------------- */
   playTone(freq, duration) {
     try {
