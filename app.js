@@ -21,6 +21,7 @@ class MaskingRemoverApp {
     // 구조: { [pageNum: number]: Array<{ id, order, x, y, w, h, style, text, isRevealed }> }
     this.pageMasks = { 1: [] };
     this.revealHistory = []; // 순차 공개 히스토리 (마스크 ID 배열)
+    this.actionHistory = []; // 되돌리기 (Undo) 전용 액션 스택
 
     // 단어 카드 포커스 모드 상태
     this.isWordCardOpen = false;
@@ -243,7 +244,7 @@ class MaskingRemoverApp {
 
     // 하단 순차 공개 컨트롤러
     this.nextRevealBtn.addEventListener('click', () => this.revealNext());
-    this.prevRevealBtn.addEventListener('click', () => this.restorePrev());
+    this.prevRevealBtn.addEventListener('click', () => this.undo());
     this.hideAllBtn.addEventListener('click', () => this.hideAll());
     this.revealAllBtn.addEventListener('click', () => this.revealAll());
 
@@ -835,6 +836,7 @@ class MaskingRemoverApp {
       this.pageMasks[this.currentPage] = [];
     }
     this.pageMasks[this.currentPage].push(newMask);
+    this.actionHistory.push({ type: 'create_mask', id: newMask.id, page: this.currentPage });
 
     this.playTone(520, 0.08);
     this.renderMasks();
@@ -1380,6 +1382,7 @@ class MaskingRemoverApp {
     const target = hiddenMasks[0];
     target.isRevealed = true;
     this.revealHistory.push(target.id);
+    this.actionHistory.push({ type: 'reveal_mask', id: target.id, page: this.currentPage });
 
     this.playTone(660, 0.12);
     this.renderMasks();
@@ -1404,16 +1407,108 @@ class MaskingRemoverApp {
     }
   }
 
+  /* -------------------------------------------------------------
+   * 실행 취소 및 되돌리기 (Undo Engine: Ctrl + Z / ←)
+   * ----------------------------------------------------------- */
+  undo() {
+    if (this.actionHistory && this.actionHistory.length > 0) {
+      const action = this.actionHistory.pop();
+      if (action.page && action.page !== this.currentPage && this.docType === 'pdf') {
+        this.changePage(action.page);
+      }
+
+      const masks = this.getCurrentMasks();
+      switch (action.type) {
+        case 'reveal_mask': {
+          const mask = masks.find(m => m.id === action.id);
+          if (mask) {
+            mask.isRevealed = false;
+            this.revealHistory = this.revealHistory.filter(id => id !== mask.id);
+            this.playTone(440, 0.08);
+            this.renderMasks();
+            this.updateUI();
+            this.showToast(`가림판 #${mask.order} 복구 (되돌리기)`);
+            return;
+          }
+          break;
+        }
+        case 'create_mask': {
+          const idx = masks.findIndex(m => m.id === action.id);
+          if (idx !== -1) {
+            masks.splice(idx, 1);
+            masks.forEach((m, i) => m.order = i + 1);
+            this.revealHistory = this.revealHistory.filter(id => id !== action.id);
+            this.playTone(380, 0.08);
+            this.renderMasks();
+            this.updateUI();
+            if (this.isWordCardOpen) this.renderWordCard();
+            this.showToast('새로 만든 가림판 삭제 (되돌리기)');
+            return;
+          }
+          break;
+        }
+        case 'delete_mask': {
+          const restored = action.mask;
+          masks.splice(action.index, 0, restored);
+          masks.forEach((m, i) => m.order = i + 1);
+          this.playTone(520, 0.08);
+          this.renderMasks();
+          this.updateUI();
+          if (this.isWordCardOpen) this.renderWordCard();
+          this.showToast(`삭제했던 가림판 #${restored.order} 복원 (되돌리기)`);
+          return;
+        }
+        case 'reveal_all': {
+          action.ids.forEach(id => {
+            const m = masks.find(x => x.id === id);
+            if (m) m.isRevealed = false;
+          });
+          this.revealHistory = [];
+          this.playTone(440, 0.08);
+          this.renderMasks();
+          this.updateUI();
+          this.showToast('전체 공개 취소 (되돌리기)');
+          return;
+        }
+        case 'hide_all': {
+          action.ids.forEach(id => {
+            const m = masks.find(x => x.id === id);
+            if (m) m.isRevealed = true;
+          });
+          this.revealHistory = [...action.ids];
+          this.playTone(660, 0.1);
+          this.renderMasks();
+          this.updateUI();
+          this.showToast('다시 가리기 취소 (되돌리기)');
+          return;
+        }
+      }
+    }
+
+    // actionHistory에 기록이 없더라도 revealHistory가 남아있다면 이전 가림판 복구 수행
+    if (this.revealHistory.length > 0) {
+      this.restorePrev();
+      this.showToast('이전 가림판 복구 (되돌리기)');
+    } else {
+      this.showToast('되돌릴 이전 작업이 없습니다.');
+    }
+  }
+
   revealAll() {
     const masks = this.getCurrentMasks();
     if (masks.length === 0) return;
 
+    const newlyRevealedIds = masks.filter(m => !m.isRevealed).map(m => m.id);
     masks.forEach(m => {
       m.isRevealed = true;
       if (!this.revealHistory.includes(m.id)) {
         this.revealHistory.push(m.id);
       }
     });
+
+    if (newlyRevealedIds.length > 0) {
+      this.actionHistory.push({ type: 'reveal_all', ids: newlyRevealedIds, page: this.currentPage });
+    }
 
     this.playTone(880, 0.15);
     this.renderMasks();
@@ -1425,8 +1520,13 @@ class MaskingRemoverApp {
     const masks = this.getCurrentMasks();
     if (masks.length === 0) return;
 
+    const prevRevealed = masks.filter(m => m.isRevealed).map(m => m.id);
     masks.forEach(m => m.isRevealed = false);
     this.revealHistory = [];
+
+    if (prevRevealed.length > 0) {
+      this.actionHistory.push({ type: 'hide_all', ids: prevRevealed, page: this.currentPage });
+    }
 
     this.playTone(330, 0.1);
     this.renderMasks();
@@ -1442,6 +1542,7 @@ class MaskingRemoverApp {
     target.isRevealed = !target.isRevealed;
     if (target.isRevealed) {
       this.revealHistory.push(target.id);
+      this.actionHistory.push({ type: 'reveal_mask', id: target.id, page: this.currentPage });
       this.playTone(660, 0.1);
     } else {
       this.revealHistory = this.revealHistory.filter(id => id !== target.id);
@@ -1456,6 +1557,9 @@ class MaskingRemoverApp {
     const masks = this.getCurrentMasks();
     const index = masks.findIndex(m => m.id === maskId);
     if (index !== -1) {
+      const deletedMask = JSON.parse(JSON.stringify(masks[index]));
+      this.actionHistory.push({ type: 'delete_mask', mask: deletedMask, index, page: this.currentPage });
+
       masks.splice(index, 1);
       masks.forEach((m, idx) => m.order = idx + 1);
       this.revealHistory = this.revealHistory.filter(id => id !== maskId);
@@ -1491,7 +1595,7 @@ class MaskingRemoverApp {
     this.progressFill.style.width = `${percent}%`;
 
     this.nextRevealBtn.disabled = total === 0 || revealedCount === total;
-    this.prevRevealBtn.disabled = this.revealHistory.length === 0;
+    this.prevRevealBtn.disabled = this.revealHistory.length === 0 && (!this.actionHistory || this.actionHistory.length === 0);
   }
 
   /* -------------------------------------------------------------
@@ -1500,6 +1604,23 @@ class MaskingRemoverApp {
   handleKeyDown(e) {
     // 텍스트 인풋 포커스 중일 때는 단축키 무시
     if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+    // Ctrl + Z: 실행 취소 / 되돌리기
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      if (this.isWordCardOpen) {
+        const masks = this.getCurrentMasks();
+        const currentMask = masks[this.currentCardIndex];
+        if (currentMask && currentMask.isRevealed) {
+          this.toggleWordCardContent();
+        } else if (this.currentCardIndex > 0) {
+          this.prevWordCard();
+        }
+      } else {
+        this.undo();
+      }
+      return;
+    }
 
     // 1. 단어 카드 포커스 모달이 열려있는 경우의 전용 단축키
     if (this.isWordCardOpen) {
@@ -1511,7 +1632,12 @@ class MaskingRemoverApp {
           break;
         case 'ArrowLeft':
           e.preventDefault();
-          this.prevWordCard();
+          const currentMask = this.getCurrentMasks()[this.currentCardIndex];
+          if (currentMask && currentMask.isRevealed) {
+            this.toggleWordCardContent();
+          } else {
+            this.prevWordCard();
+          }
           break;
         case 'Enter':
           e.preventDefault();
@@ -1542,7 +1668,7 @@ class MaskingRemoverApp {
         break;
       case 'ArrowLeft':
         e.preventDefault();
-        this.restorePrev();
+        this.undo();
         break;
       case 'KeyC':
         e.preventDefault();
