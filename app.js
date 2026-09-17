@@ -1,11 +1,11 @@
 /**
- * EduMask - 수업용 가림판 및 순차 공개 도구
+ * Masking Remover - 수업용 가림판 및 순차 공개 도구
  * Core Application Engine
  */
 
-class EduMaskApp {
+class MaskingRemoverApp {
   constructor() {
-    // 앱 상태
+    // 앱 모드 및 스타일 상태
     this.mode = 'draw'; // 'draw' | 'present'
     this.activeStyle = 'slate'; // 'slate' | 'sticky' | 'blue' | 'hint'
     this.zoom = 1.0;
@@ -18,9 +18,13 @@ class EduMaskApp {
     this.currentImage = null;
 
     // 마스킹 데이터 (페이지별 배열 보관)
-    // 구조: { [pageNum: number]: Array<{ id, order, x, y, w, h, style, isRevealed }> }
+    // 구조: { [pageNum: number]: Array<{ id, order, x, y, w, h, style, text, isRevealed }> }
     this.pageMasks = { 1: [] };
     this.revealHistory = []; // 순차 공개 히스토리 (마스크 ID 배열)
+
+    // 단어 카드 포커스 모드 상태
+    this.isWordCardOpen = false;
+    this.currentCardIndex = 0;
 
     // 드로잉 인터랙션 상태
     this.isDrawing = false;
@@ -38,6 +42,9 @@ class EduMaskApp {
 
     // 기본 샘플 학습지 로드
     this.loadSampleWorksheet();
+
+    // 로컬 템플릿 보관함 목록 초기화
+    this.initLocalPresets();
   }
 
   /* -------------------------------------------------------------
@@ -53,6 +60,7 @@ class EduMaskApp {
     // 헤더 및 툴바
     this.modeDrawBtn = document.getElementById('modeDrawBtn');
     this.modePresentBtn = document.getElementById('modePresentBtn');
+    this.wordCardModeBtn = document.getElementById('wordCardModeBtn');
     this.fileInput = document.getElementById('fileInput');
     this.uploadBtn = document.getElementById('uploadBtn');
     this.zoomInBtn = document.getElementById('zoomInBtn');
@@ -71,17 +79,23 @@ class EduMaskApp {
     this.nextPageBtn = document.getElementById('nextPageBtn');
     this.pageIndicator = document.getElementById('pageIndicator');
 
-    // 사이드바 컨트롤
+    // 사이드바 컨트롤 & 템플릿 보관함
     this.maskCountBadge = document.getElementById('maskCountBadge');
     this.maskListContainer = document.getElementById('maskListContainer');
     this.clearAllMasksBtn = document.getElementById('clearAllMasksBtn');
     this.styleButtons = document.querySelectorAll('.style-picker-btn');
+    this.presetNameInput = document.getElementById('presetNameInput');
+    this.saveLocalPresetBtn = document.getElementById('saveLocalPresetBtn');
+    this.presetSelect = document.getElementById('presetSelect');
+    this.loadLocalPresetBtn = document.getElementById('loadLocalPresetBtn');
+    this.deleteLocalPresetBtn = document.getElementById('deleteLocalPresetBtn');
     this.exportJsonBtn = document.getElementById('exportJsonBtn');
     this.importJsonBtn = document.getElementById('importJsonBtn');
     this.jsonFileInput = document.getElementById('jsonFileInput');
 
     // 하단 프레젠테이션 컨트롤러
     this.presentationBar = document.getElementById('presentationBar');
+    this.barDragHandle = document.getElementById('barDragHandle');
     this.prevRevealBtn = document.getElementById('prevRevealBtn');
     this.nextRevealBtn = document.getElementById('nextRevealBtn');
     this.hideAllBtn = document.getElementById('hideAllBtn');
@@ -89,7 +103,22 @@ class EduMaskApp {
     this.progressRatioText = document.getElementById('progressRatioText');
     this.progressFill = document.getElementById('progressFill');
 
-    // 모달 및 오버레이
+    // 단어 카드 포커스 모달 요소
+    this.wordCardBackdrop = document.getElementById('wordCardBackdrop');
+    this.closeWordCardBtn = document.getElementById('closeWordCardBtn');
+    this.wordCardMain = document.getElementById('wordCardMain');
+    this.wordCardNum = document.getElementById('wordCardNum');
+    this.wordCardLabel = document.getElementById('wordCardLabel');
+    this.wordCardText = document.getElementById('wordCardText');
+    this.wordCardCropCanvas = document.getElementById('wordCardCropCanvas');
+    this.wordCardCropCtx = this.wordCardCropCanvas.getContext('2d');
+    this.wordCardStateHint = document.getElementById('wordCardStateHint');
+    this.prevWordCardBtn = document.getElementById('prevWordCardBtn');
+    this.toggleWordCardBtn = document.getElementById('toggleWordCardBtn');
+    this.nextWordCardBtn = document.getElementById('nextWordCardBtn');
+    this.wordCardProgress = document.getElementById('wordCardProgress');
+
+    // 도움말 모달 및 오버레이
     this.helpModal = document.getElementById('helpModal');
     this.closeHelpBtn = document.getElementById('closeHelpBtn');
     this.dragDropOverlay = document.getElementById('dragDropOverlay');
@@ -103,6 +132,7 @@ class EduMaskApp {
     // 모드 전환
     this.modeDrawBtn.addEventListener('click', () => this.setMode('draw'));
     this.modePresentBtn.addEventListener('click', () => this.setMode('present'));
+    this.wordCardModeBtn.addEventListener('click', () => this.openWordCard());
 
     // 사이드바 토글
     this.toggleSidebarBtn.addEventListener('click', () => {
@@ -131,14 +161,29 @@ class EduMaskApp {
       }
     });
 
-    // 줌 조절
+    // 줌 조절 버튼
     this.zoomInBtn.addEventListener('click', () => this.setZoom(this.zoom + 0.15));
     this.zoomOutBtn.addEventListener('click', () => this.setZoom(this.zoom - 0.15));
     this.zoomResetBtn.addEventListener('click', () => this.setZoom(1.0));
     this.fitWidthBtn.addEventListener('click', () => this.fitToWidth());
 
-    // 전체화면
+    // 전체화면 및 자동 가로 맞춤
     this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+    document.addEventListener('fullscreenchange', () => {
+      // 전체화면 진입 시 항상 가로 맞춤(Fit Width)을 기본 default로 설정
+      if (document.fullscreenElement) {
+        setTimeout(() => this.fitToWidth(), 150);
+      }
+    });
+
+    // Ctrl + 마우스 휠을 이용한 화면 확대/축소
+    this.viewportContainer.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.1 : -0.1;
+        this.setZoom(this.zoom + delta);
+      }
+    }, { passive: false });
 
     // 마스킹 스타일 선택
     this.styleButtons.forEach(btn => {
@@ -160,8 +205,21 @@ class EduMaskApp {
     this.hideAllBtn.addEventListener('click', () => this.hideAll());
     this.revealAllBtn.addEventListener('click', () => this.revealAll());
 
-    // 사이드바 액션
+    // 단어 카드 모달 컨트롤러
+    this.closeWordCardBtn.addEventListener('click', () => this.closeWordCard());
+    this.wordCardMain.addEventListener('click', () => this.toggleWordCardContent());
+    this.toggleWordCardBtn.addEventListener('click', () => this.toggleWordCardContent());
+    this.nextWordCardBtn.addEventListener('click', () => this.nextWordCard());
+    this.prevWordCardBtn.addEventListener('click', () => this.prevWordCard());
+    this.wordCardBackdrop.addEventListener('click', (e) => {
+      if (e.target === this.wordCardBackdrop) this.closeWordCard();
+    });
+
+    // 사이드바 액션 & 템플릿 보관함
     this.clearAllMasksBtn.addEventListener('click', () => this.clearAllMasks());
+    this.saveLocalPresetBtn.addEventListener('click', () => this.saveLocalPreset());
+    this.loadLocalPresetBtn.addEventListener('click', () => this.loadLocalPreset());
+    this.deleteLocalPresetBtn.addEventListener('click', () => this.deleteLocalPreset());
     this.exportJsonBtn.addEventListener('click', () => this.exportToJson());
     this.importJsonBtn.addEventListener('click', () => this.jsonFileInput.click());
     this.jsonFileInput.addEventListener('change', (e) => this.importFromJson(e));
@@ -179,6 +237,9 @@ class EduMaskApp {
 
     // 키보드 단축키
     window.addEventListener('keydown', (e) => this.handleKeyDown(e));
+
+    // 진행상황 패널 마우스/터치 드래그앤드롭 이동 초기화
+    this.initDraggablePresentationBar();
   }
 
   /* -------------------------------------------------------------
@@ -190,24 +251,28 @@ class EduMaskApp {
       this.modeDrawBtn.classList.add('active');
       this.modePresentBtn.classList.remove('active');
       this.viewportContainer.classList.add('mode-draw');
-      this.showToast('가림판 그리기 모드: 원하는 영역을 드래그하세요.');
+      // 편집 모드에서는 사이드바가 열려 편리하게 작업
+      this.sidebar.classList.remove('collapsed');
+      this.showToast('가림판 그리기(편집) 모드');
     } else {
       this.modeDrawBtn.classList.remove('active');
       this.modePresentBtn.classList.add('active');
       this.viewportContainer.classList.remove('mode-draw');
+      // 전체 수업 진행 모드에서는 사이드바를 왼쪽으로 안 보이게 자동 숨김!
+      this.sidebar.classList.add('collapsed');
       this.showToast('수업 진행 모드: Space 또는 → 키로 순서대로 지웁니다.');
     }
   }
 
   setZoom(value) {
-    this.zoom = Math.max(0.3, Math.min(2.5, Math.round(value * 100) / 100));
+    this.zoom = Math.max(0.2, Math.min(3.0, Math.round(value * 100) / 100));
     this.canvasWrapper.style.transform = `scale(${this.zoom})`;
     this.zoomLevelText.textContent = `${Math.round(this.zoom * 100)}%`;
   }
 
   fitToWidth() {
     if (!this.renderCanvas.width) return;
-    const availableWidth = this.viewportContainer.clientWidth - 80;
+    const availableWidth = this.viewportContainer.clientWidth - 40;
     const canvasWidth = this.renderCanvas.width;
     const calculatedZoom = availableWidth / canvasWidth;
     this.setZoom(calculatedZoom);
@@ -221,6 +286,67 @@ class EduMaskApp {
     }
   }
 
+  initDraggablePresentationBar() {
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let initialLeft = 0, initialTop = 0;
+
+    const onPointerDown = (e) => {
+      if (e.target.closest('button, input, select, a')) return;
+
+      isDragging = true;
+      this.presentationBar.classList.add('is-dragging');
+      this.presentationBar.setPointerCapture(e.pointerId);
+
+      const rect = this.presentationBar.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      initialLeft = rect.left;
+      initialTop = rect.top;
+
+      this.presentationBar.style.transform = 'none';
+      this.presentationBar.style.bottom = 'auto';
+      this.presentationBar.style.left = `${initialLeft}px`;
+      this.presentationBar.style.top = `${initialTop}px`;
+
+      e.preventDefault();
+    };
+
+    const onPointerMove = (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      let newLeft = initialLeft + dx;
+      let newTop = initialTop + dy;
+
+      const barW = this.presentationBar.offsetWidth;
+      const barH = this.presentationBar.offsetHeight;
+      const maxLeft = window.innerWidth - barW - 10;
+      const maxTop = window.innerHeight - barH - 10;
+
+      newLeft = Math.max(10, Math.min(maxLeft, newLeft));
+      newTop = Math.max(10, Math.min(maxTop, newTop));
+
+      this.presentationBar.style.left = `${newLeft}px`;
+      this.presentationBar.style.top = `${newTop}px`;
+    };
+
+    const onPointerUp = (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      this.presentationBar.classList.remove('is-dragging');
+      try {
+        this.presentationBar.releasePointerCapture(e.pointerId);
+      } catch {}
+    };
+
+    this.presentationBar.addEventListener('pointerdown', onPointerDown);
+    this.presentationBar.addEventListener('pointermove', onPointerMove);
+    this.presentationBar.addEventListener('pointerup', onPointerUp);
+    this.presentationBar.addEventListener('pointercancel', onPointerUp);
+  }
+
   /* -------------------------------------------------------------
    * 4. 파일 처리 (PDF & 이미지)
    * ----------------------------------------------------------- */
@@ -228,7 +354,7 @@ class EduMaskApp {
     const file = e.target.files[0];
     if (file) {
       this.loadFile(file);
-      e.target.value = ''; // 재선택 가능하도록 리셋
+      e.target.value = '';
     }
   }
 
@@ -256,7 +382,6 @@ class EduMaskApp {
         this.totalPages = 1;
         this.pdfNavBar.style.display = 'none';
 
-        // 새 이미지 로드 시 해당 페이지 마스크 초기화 또는 생성
         if (!this.pageMasks[1]) {
           this.pageMasks[1] = [];
         }
@@ -278,7 +403,6 @@ class EduMaskApp {
     this.ctx.clearRect(0, 0, this.renderCanvas.width, this.renderCanvas.height);
     this.ctx.drawImage(img, 0, 0);
 
-    // 오버레이 크기 동기화
     this.maskOverlay.style.width = `${this.renderCanvas.width}px`;
     this.maskOverlay.style.height = `${this.renderCanvas.height}px`;
   }
@@ -299,7 +423,8 @@ class EduMaskApp {
       this.currentPage = 1;
 
       this.pdfNavBar.style.display = 'flex';
-      this.renderPdfPage(this.currentPage);
+      await this.renderPdfPage(this.currentPage);
+      this.fitToWidth();
       this.showToast(`PDF 로드 완료: ${file.name} (총 ${this.totalPages}페이지)`);
     } catch (err) {
       console.error('PDF 로드 실패:', err);
@@ -311,7 +436,6 @@ class EduMaskApp {
     if (!this.pdfDoc) return;
     try {
       const page = await this.pdfDoc.getPage(pageNum);
-      // 고해상도 렌더링을 위해 스케일 1.5 적용
       const viewport = page.getViewport({ scale: 1.5 });
 
       this.renderCanvas.width = viewport.width;
@@ -325,7 +449,6 @@ class EduMaskApp {
 
       await page.render(renderContext).promise;
 
-      // 오버레이 크기 동기화
       this.maskOverlay.style.width = `${viewport.width}px`;
       this.maskOverlay.style.height = `${viewport.height}px`;
 
@@ -360,7 +483,6 @@ class EduMaskApp {
     this.maskOverlay.style.height = `${h}px`;
 
     const c = this.ctx;
-    // 배경 깔끔한 종이 질감
     c.fillStyle = '#ffffff';
     c.fillRect(0, 0, w, h);
 
@@ -377,7 +499,7 @@ class EduMaskApp {
 
     c.fillStyle = '#64748b';
     c.font = '16px "Pretendard", sans-serif';
-    c.fillText('가림판을 드래그하여 생성하거나, 하단의 [다음 가림판 공개(Space)]를 눌러보세요!', 70, 125);
+    c.fillText('가림판을 더블클릭하여 텍스트를 입력하거나, [단어 카드(C)]로 포커스 퀴즈를 진행해보세요!', 70, 125);
 
     // 문제 1: 과학 퀴즈
     c.fillStyle = '#0f172a';
@@ -434,15 +556,15 @@ class EduMaskApp {
 
     c.fillStyle = '#2563eb';
     c.font = 'bold 20px "Pretendard", sans-serif';
-    c.fillText('💡 EduMask 선생님 꿀팁', 90, 815);
+    c.fillText('💡 Masking Remover 안내', 90, 815);
 
     c.fillStyle = '#475569';
     c.font = '17px "Pretendard", sans-serif';
-    c.fillText('1. 마우스로 드래그하면 즉시 가림판이 생기고 ①, ②, ③ 번호가 자동 부여됩니다.', 90, 855);
-    c.fillText('2. [수업 진행] 모드에서 키보드 Space 바를 누르면 번호 순서대로 스무스하게 열립니다.', 90, 895);
-    c.fillText('3. 학생이 특정 번호를 먼저 질문하면, 해당 가림판을 마우스로 콕 클릭해보세요!', 90, 935);
+    c.fillText('1. 마스킹 네모 박스를 더블클릭하면 힌트나 단어 텍스트를 바로 입력할 수 있습니다.', 90, 855);
+    c.fillText('2. 상단의 [단어 카드(C)]를 누르면 대형 플래시 카드 포커스 모드로 퀴즈를 진행합니다.', 90, 895);
+    c.fillText('3. Ctrl + 마우스 휠로 부드럽게 화면을 확대/축소하고, 전체화면(F) 시 자동으로 가로 맞춤됩니다.', 90, 935);
 
-    // 기본 샘플 가림판 4개 자동 등록
+    // 기본 샘플 가림판 4개 등록 (텍스트 포함)
     this.pageMasks[1] = [
       {
         id: 'sample_mask_1',
@@ -452,6 +574,7 @@ class EduMaskApp {
         w: 320 / w,
         h: 40 / h,
         style: 'slate',
+        text: '빛의 굴절 현상 (Refraction)',
         isRevealed: false
       },
       {
@@ -462,6 +585,7 @@ class EduMaskApp {
         w: 120 / w,
         h: 40 / h,
         style: 'sticky',
+        text: 'words',
         isRevealed: false
       },
       {
@@ -472,6 +596,7 @@ class EduMaskApp {
         w: 350 / w,
         h: 42 / h,
         style: 'blue',
+        text: '훈민정음 (Hunminjeongeum)',
         isRevealed: false
       },
       {
@@ -482,6 +607,7 @@ class EduMaskApp {
         w: 240 / w,
         h: 36 / h,
         style: 'hint',
+        text: '세종대왕 (King Sejong)',
         isRevealed: false
       }
     ];
@@ -495,14 +621,10 @@ class EduMaskApp {
    * 6. 마스킹 인터랙션 (드래그 박스 생성)
    * ----------------------------------------------------------- */
   onPointerDown(e) {
-    // 그리기 모드가 아니거나, 마우스 우클릭인 경우 무시
     if (this.mode !== 'draw' || e.button !== 0) return;
-
-    // 이미 존재하는 마스크 박스를 클릭한 경우 드래그 시작 방지
     if (e.target.closest('.mask-box')) return;
 
     const rect = this.maskOverlay.getBoundingClientRect();
-    // 줌 스케일을 반영한 실제 오버레이 내부 좌표 계산
     const currentScale = this.zoom;
     const startX = (e.clientX - rect.left) / currentScale;
     const startY = (e.clientY - rect.top) / currentScale;
@@ -510,7 +632,6 @@ class EduMaskApp {
     this.isDrawing = true;
     this.drawStart = { x: startX, y: startY };
 
-    // 임시 가이드 사각형 생성
     this.activeDrawingRect = document.createElement('div');
     this.activeDrawingRect.className = 'drawing-rect';
     this.activeDrawingRect.style.left = `${startX}px`;
@@ -519,7 +640,6 @@ class EduMaskApp {
     this.activeDrawingRect.style.height = '0px';
     this.maskOverlay.appendChild(this.activeDrawingRect);
 
-    // 터치 스크롤 등 기본 동작 방지
     e.preventDefault();
   }
 
@@ -559,16 +679,13 @@ class EduMaskApp {
     const pixelW = Math.abs(currentX - this.drawStart.x);
     const pixelH = Math.abs(currentY - this.drawStart.y);
 
-    // 임시 사각형 DOM 제거
     if (this.activeDrawingRect.parentNode) {
       this.activeDrawingRect.parentNode.removeChild(this.activeDrawingRect);
     }
     this.activeDrawingRect = null;
 
-    // 너무 작은 크기 (클릭 실수 등)는 마스크 생성 무시
     if (pixelW < 14 || pixelH < 14) return;
 
-    // 상대 비율(0.0 ~ 1.0)로 변환하여 저장 (반응형/줌 완벽 호환)
     const newMask = {
       id: 'mask_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
       order: (this.pageMasks[this.currentPage]?.length || 0) + 1,
@@ -577,6 +694,7 @@ class EduMaskApp {
       w: Math.max(0, Math.min(1, pixelW / overlayW)),
       h: Math.max(0, Math.min(1, pixelH / overlayH)),
       style: this.activeStyle,
+      text: '', // 신규 마스크 텍스트 필드
       isRevealed: false
     };
 
@@ -585,13 +703,13 @@ class EduMaskApp {
     }
     this.pageMasks[this.currentPage].push(newMask);
 
-    this.playTone(520, 0.08); // 생성 효과음
+    this.playTone(520, 0.08);
     this.renderMasks();
     this.updateUI();
   }
 
   /* -------------------------------------------------------------
-   * 7. 마스크 DOM 렌더링
+   * 7. 마스크 DOM 렌더링 & 인라인 텍스트 편집
    * ----------------------------------------------------------- */
   renderMasks() {
     this.maskOverlay.innerHTML = '';
@@ -609,14 +727,27 @@ class EduMaskApp {
       el.style.width = `${(mask.w * 100).toFixed(3)}%`;
       el.style.height = `${(mask.h * 100).toFixed(3)}%`;
       el.setAttribute('data-id', mask.id);
+      el.title = mask.text ? `${mask.text} (더블클릭하여 수정)` : '더블클릭하여 텍스트/힌트 입력';
 
-      // 번호 배지
+      // 마스크 내용 컨테이너 (번호 배지 + 텍스트)
+      const content = document.createElement('div');
+      content.className = 'mask-content';
+
       const badge = document.createElement('div');
       badge.className = 'mask-badge';
       badge.textContent = mask.order;
-      el.appendChild(badge);
+      content.appendChild(badge);
 
-      // 삭제 버튼 (편집 모드 시 마우스 호버 표시)
+      if (mask.text) {
+        const textSpan = document.createElement('span');
+        textSpan.className = 'mask-text';
+        textSpan.textContent = mask.text;
+        content.appendChild(textSpan);
+      }
+
+      el.appendChild(content);
+
+      // 삭제 버튼
       const delBtn = document.createElement('button');
       delBtn.className = 'mask-delete-btn';
       delBtn.innerHTML = '&times;';
@@ -627,16 +758,147 @@ class EduMaskApp {
       });
       el.appendChild(delBtn);
 
-      // 마스크 클릭 시 개별 토글
+      // 마스크 드래그앤드롭 위치 이동 인터랙션
+      let isDraggingThis = false;
+      let startPointerX = 0, startPointerY = 0;
+      let maskStartPixelX = 0, maskStartPixelY = 0;
+      let hasMoved = false;
+
+      el.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        if (e.target.closest('.mask-delete-btn') || e.target.closest('.mask-inline-edit')) return;
+
+        if (this.mode === 'draw') {
+          isDraggingThis = true;
+          hasMoved = false;
+
+          const rect = this.maskOverlay.getBoundingClientRect();
+          const currentScale = this.zoom;
+          startPointerX = (e.clientX - rect.left) / currentScale;
+          startPointerY = (e.clientY - rect.top) / currentScale;
+
+          const overlayW = this.maskOverlay.clientWidth;
+          const overlayH = this.maskOverlay.clientHeight;
+          maskStartPixelX = mask.x * overlayW;
+          maskStartPixelY = mask.y * overlayH;
+
+          el.setPointerCapture(e.pointerId);
+          e.stopPropagation();
+        }
+      });
+
+      el.addEventListener('pointermove', (e) => {
+        if (!isDraggingThis) return;
+
+        const rect = this.maskOverlay.getBoundingClientRect();
+        const currentScale = this.zoom;
+        const currentPointerX = (e.clientX - rect.left) / currentScale;
+        const currentPointerY = (e.clientY - rect.top) / currentScale;
+
+        const deltaX = currentPointerX - startPointerX;
+        const deltaY = currentPointerY - startPointerY;
+
+        if (Math.hypot(deltaX, deltaY) > 4) {
+          hasMoved = true;
+          el.classList.add('is-dragging');
+        }
+
+        if (hasMoved) {
+          const overlayW = this.maskOverlay.clientWidth;
+          const overlayH = this.maskOverlay.clientHeight;
+
+          let newPixelX = maskStartPixelX + deltaX;
+          let newPixelY = maskStartPixelY + deltaY;
+
+          const maskW = mask.w * overlayW;
+          const maskH = mask.h * overlayH;
+
+          newPixelX = Math.max(0, Math.min(overlayW - maskW, newPixelX));
+          newPixelY = Math.max(0, Math.min(overlayH - maskH, newPixelY));
+
+          el.style.left = `${((newPixelX / overlayW) * 100).toFixed(3)}%`;
+          el.style.top = `${((newPixelY / overlayH) * 100).toFixed(3)}%`;
+        }
+      });
+
+      const onPointerEnd = (e) => {
+        if (!isDraggingThis) return;
+        isDraggingThis = false;
+        el.classList.remove('is-dragging');
+        try { el.releasePointerCapture(e.pointerId); } catch {}
+
+        if (hasMoved) {
+          // 드래그 이동 완료: 최종 좌표 저장
+          const currentLeftPercent = parseFloat(el.style.left) / 100;
+          const currentTopPercent = parseFloat(el.style.top) / 100;
+
+          mask.x = Math.max(0, Math.min(1 - mask.w, currentLeftPercent));
+          mask.y = Math.max(0, Math.min(1 - mask.h, currentTopPercent));
+
+          if (this.isWordCardOpen) this.renderWordCard();
+          this.showToast(`가림판 #${mask.order} 위치가 변경되었습니다.`);
+        } else {
+          // 단순 클릭 시 공개 토글
+          this.toggleMask(mask.id);
+        }
+
+        hasMoved = false;
+        e.stopPropagation();
+      };
+
+      el.addEventListener('pointerup', onPointerEnd);
+      el.addEventListener('pointercancel', onPointerEnd);
+
+      // 수업 진행 모드에서의 클릭 공개 토글
       el.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.toggleMask(mask.id);
+        if (this.mode !== 'draw') {
+          this.toggleMask(mask.id);
+        }
+      });
+
+      // 마스크 더블 클릭: 인라인 텍스트 입력창 활성화
+      el.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        this.startInlineTextEdit(mask, el);
       });
 
       this.maskOverlay.appendChild(el);
     });
 
     this.renderSidebarList();
+  }
+
+  startInlineTextEdit(mask, maskEl) {
+    // 기존 입력창이 있으면 중복 방지
+    if (maskEl.querySelector('.mask-inline-edit')) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'mask-inline-edit';
+    input.value = mask.text || '';
+    input.placeholder = '힌트/단어 입력 후 Enter';
+
+    const saveText = () => {
+      mask.text = input.value.trim();
+      this.renderMasks();
+      if (this.isWordCardOpen) this.renderWordCard();
+    };
+
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        saveText();
+      } else if (e.key === 'Escape') {
+        this.renderMasks();
+      }
+    });
+
+    input.addEventListener('blur', saveText);
+
+    maskEl.appendChild(input);
+    input.focus();
+    input.select();
   }
 
   renderSidebarList() {
@@ -657,11 +919,18 @@ class EduMaskApp {
       row.className = `mask-item-row ${mask.isRevealed ? 'is-revealed' : ''}`;
 
       row.innerHTML = `
-        <div class="mask-info">
+        <div class="mask-info" style="flex: 1; overflow: hidden;">
           <div class="mask-num-badge">${mask.order}</div>
-          <span class="mask-title">가림판 #${mask.order} (${mask.isRevealed ? '공개됨' : '가림'})</span>
+          <input type="text" class="mask-text-input" placeholder="힌트/단어 입력" value="${mask.text ? mask.text.replace(/"/g, '&quot;') : ''}">
         </div>
         <div class="mask-actions">
+          <button class="btn btn-sm btn-icon-only card-row-btn" title="단어 카드로 보기">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: block;">
+              <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          </button>
           <button class="btn btn-sm btn-icon-only toggle-row-btn" title="${mask.isRevealed ? '다시 가리기' : '공개하기'}">
             ${mask.isRevealed ? '🔒' : '👁️'}
           </button>
@@ -671,10 +940,27 @@ class EduMaskApp {
         </div>
       `;
 
+      // 텍스트 인풋 수정 시 실시간 동기화
+      const textInput = row.querySelector('.mask-text-input');
+      textInput.addEventListener('change', () => {
+        mask.text = textInput.value.trim();
+        this.renderMasks();
+        if (this.isWordCardOpen) this.renderWordCard();
+      });
+      textInput.addEventListener('keydown', (e) => e.stopPropagation());
+
+      // 단어 카드 버튼
+      row.querySelector('.card-row-btn').addEventListener('click', () => {
+        const index = masks.findIndex(m => m.id === mask.id);
+        this.openWordCard(index);
+      });
+
+      // 공개 토글 버튼
       row.querySelector('.toggle-row-btn').addEventListener('click', () => {
         this.toggleMask(mask.id);
       });
 
+      // 삭제 버튼
       row.querySelector('.del-row-btn').addEventListener('click', () => {
         this.deleteMask(mask.id);
       });
@@ -684,7 +970,146 @@ class EduMaskApp {
   }
 
   /* -------------------------------------------------------------
-   * 8. 순차 공개 (지우기) 엔진
+   * 8. 단어 카드 포커스 모드 (Word Card Focus Modal)
+   * ----------------------------------------------------------- */
+  openWordCard(index = null) {
+    const masks = this.getCurrentMasks();
+    if (masks.length === 0) {
+      this.showToast('등록된 가림판이 없습니다. 먼저 화면에 가림판을 만들어주세요.');
+      return;
+    }
+
+    if (index !== null && index >= 0 && index < masks.length) {
+      this.currentCardIndex = index;
+    } else {
+      // 첫 미공개 카드 또는 현재 인덱스
+      const firstUnrevealed = masks.findIndex(m => !m.isRevealed);
+      this.currentCardIndex = firstUnrevealed !== -1 ? firstUnrevealed : 0;
+    }
+
+    this.isWordCardOpen = true;
+    this.wordCardBackdrop.classList.add('open');
+    this.renderWordCard();
+  }
+
+  closeWordCard() {
+    this.isWordCardOpen = false;
+    this.wordCardBackdrop.classList.remove('open');
+  }
+
+  renderWordCard() {
+    const masks = this.getCurrentMasks();
+    if (masks.length === 0) {
+      this.closeWordCard();
+      return;
+    }
+
+    // 인덱스 바운더리 보호
+    if (this.currentCardIndex >= masks.length) this.currentCardIndex = masks.length - 1;
+    if (this.currentCardIndex < 0) this.currentCardIndex = 0;
+
+    const mask = masks[this.currentCardIndex];
+    this.wordCardProgress.textContent = `${this.currentCardIndex + 1} / ${masks.length}`;
+    this.wordCardNum.textContent = mask.order;
+
+    // 텍스트 내용 반영
+    if (mask.text && mask.text.trim().length > 0) {
+      this.wordCardText.textContent = mask.text;
+      this.wordCardText.classList.remove('empty');
+    } else {
+      this.wordCardText.textContent = '(입력된 힌트/단어가 없습니다)';
+      this.wordCardText.classList.add('empty');
+    }
+
+    // 캔버스 원본 크롭 렌더링
+    this.renderWordCardCrop(mask);
+
+    // 가림 / 공개 상태 텍스트 힌트 갱신
+    if (mask.isRevealed) {
+      this.wordCardCropCanvas.classList.remove('is-masked');
+      this.wordCardStateHint.innerHTML = '<span style="color: #10b981;">👁️ 정답/내용 공개됨 (클릭 시 다시 가림)</span>';
+      this.toggleWordCardBtn.textContent = '다시 가리기';
+    } else {
+      this.wordCardCropCanvas.classList.add('is-masked');
+      this.wordCardStateHint.innerHTML = '<span style="color: #38bdf8;">🔒 가림 상태 (클릭 또는 Enter로 공개)</span>';
+      this.toggleWordCardBtn.textContent = '내용 공개';
+    }
+
+    // 이전/다음 버튼 활성/비활성 제어
+    this.prevWordCardBtn.disabled = this.currentCardIndex === 0;
+    this.nextWordCardBtn.disabled = this.currentCardIndex === masks.length - 1;
+  }
+
+  renderWordCardCrop(mask) {
+    if (!this.renderCanvas.width || !this.renderCanvas.height) return;
+
+    const cropX = Math.round(mask.x * this.renderCanvas.width);
+    const cropY = Math.round(mask.y * this.renderCanvas.height);
+    const cropW = Math.max(1, Math.round(mask.w * this.renderCanvas.width));
+    const cropH = Math.max(1, Math.round(mask.h * this.renderCanvas.height));
+
+    this.wordCardCropCanvas.width = cropW;
+    this.wordCardCropCanvas.height = cropH;
+
+    this.wordCardCropCtx.clearRect(0, 0, cropW, cropH);
+    this.wordCardCropCtx.drawImage(
+      this.renderCanvas,
+      cropX, cropY, cropW, cropH,
+      0, 0, cropW, cropH
+    );
+  }
+
+  nextWordCard() {
+    const masks = this.getCurrentMasks();
+    if (masks.length === 0) return;
+
+    // 현재 카드 공개 후 다음 카드로 스무스하게 진행
+    const currentMask = masks[this.currentCardIndex];
+    if (!currentMask.isRevealed) {
+      currentMask.isRevealed = true;
+      if (!this.revealHistory.includes(currentMask.id)) {
+        this.revealHistory.push(currentMask.id);
+      }
+    }
+
+    if (this.currentCardIndex < masks.length - 1) {
+      this.currentCardIndex++;
+      this.playTone(660, 0.1);
+    } else {
+      this.showToast('마지막 단어 카드입니다.');
+    }
+
+    this.renderWordCard();
+    this.renderMasks();
+    this.updateUI();
+  }
+
+  prevWordCard() {
+    const masks = this.getCurrentMasks();
+    if (masks.length === 0) return;
+
+    if (this.currentCardIndex > 0) {
+      this.currentCardIndex--;
+      this.playTone(440, 0.08);
+      this.renderWordCard();
+      this.renderMasks();
+      this.updateUI();
+    } else {
+      this.showToast('첫 번째 단어 카드입니다.');
+    }
+  }
+
+  toggleWordCardContent() {
+    const masks = this.getCurrentMasks();
+    if (masks.length === 0) return;
+
+    const mask = masks[this.currentCardIndex];
+    this.toggleMask(mask.id);
+    this.renderWordCard();
+  }
+
+  /* -------------------------------------------------------------
+   * 9. 순차 공개 (지우기) 엔진
    * ----------------------------------------------------------- */
   getCurrentMasks() {
     return this.pageMasks[this.currentPage] || [];
@@ -692,7 +1117,6 @@ class EduMaskApp {
 
   revealNext() {
     const masks = this.getCurrentMasks();
-    // 아직 지워지지 않은 마스크 중 순번이 가장 빠른 것 탐색
     const hiddenMasks = masks
       .filter(m => !m.isRevealed)
       .sort((a, b) => a.order - b.order);
@@ -706,7 +1130,7 @@ class EduMaskApp {
     target.isRevealed = true;
     this.revealHistory.push(target.id);
 
-    this.playTone(660, 0.12); // 경쾌한 공개 사운드
+    this.playTone(660, 0.12);
     this.renderMasks();
     this.updateUI();
   }
@@ -723,7 +1147,7 @@ class EduMaskApp {
 
     if (target) {
       target.isRevealed = false;
-      this.playTone(440, 0.08); // 복구 사운드
+      this.playTone(440, 0.08);
       this.renderMasks();
       this.updateUI();
     }
@@ -782,11 +1206,11 @@ class EduMaskApp {
     const index = masks.findIndex(m => m.id === maskId);
     if (index !== -1) {
       masks.splice(index, 1);
-      // 순번 재정렬 (1, 2, 3...)
       masks.forEach((m, idx) => m.order = idx + 1);
       this.revealHistory = this.revealHistory.filter(id => id !== maskId);
       this.renderMasks();
       this.updateUI();
+      if (this.isWordCardOpen) this.renderWordCard();
     }
   }
 
@@ -798,12 +1222,13 @@ class EduMaskApp {
       this.revealHistory = [];
       this.renderMasks();
       this.updateUI();
+      if (this.isWordCardOpen) this.closeWordCard();
       this.showToast('가림판이 모두 삭제되었습니다.');
     }
   }
 
   /* -------------------------------------------------------------
-   * 9. UI 상태 및 진행 바 업데이트
+   * 10. UI 상태 및 진행 바 업데이트
    * ----------------------------------------------------------- */
   updateUI() {
     const masks = this.getCurrentMasks();
@@ -819,12 +1244,38 @@ class EduMaskApp {
   }
 
   /* -------------------------------------------------------------
-   * 10. 단축키 처리
+   * 11. 단축키 처리
    * ----------------------------------------------------------- */
   handleKeyDown(e) {
-    // 모달이나 텍스트 인풋 포커스 중일 때는 단축키 무시
+    // 텍스트 인풋 포커스 중일 때는 단축키 무시
     if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
 
+    // 1. 단어 카드 포커스 모달이 열려있는 경우의 전용 단축키
+    if (this.isWordCardOpen) {
+      switch (e.code) {
+        case 'Space':
+        case 'ArrowRight':
+          e.preventDefault();
+          this.nextWordCard(); // 단어 카드 포커스 상태에서 다음 마스킹 내용 보여주기
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.prevWordCard();
+          break;
+        case 'Enter':
+          e.preventDefault();
+          this.toggleWordCardContent();
+          break;
+        case 'KeyC':
+        case 'Escape':
+          e.preventDefault();
+          this.closeWordCard();
+          break;
+      }
+      return;
+    }
+
+    // 2. 기본 화면 단축키
     switch (e.code) {
       case 'Space':
       case 'ArrowRight':
@@ -834,6 +1285,10 @@ class EduMaskApp {
       case 'ArrowLeft':
         e.preventDefault();
         this.restorePrev();
+        break;
+      case 'KeyC':
+        e.preventDefault();
+        this.openWordCard();
         break;
       case 'KeyR':
         e.preventDefault();
@@ -862,12 +1317,105 @@ class EduMaskApp {
   }
 
   /* -------------------------------------------------------------
-   * 11. 사전 준비 데이터 저장 및 불러오기 (JSON)
+   * 12. 마스킹 템플릿 보관함 (LocalStorage & JSON)
    * ----------------------------------------------------------- */
+  initLocalPresets() {
+    try {
+      const presets = JSON.parse(localStorage.getItem('masking_remover_presets') || localStorage.getItem('edumask_presets') || '{}');
+      this.presetSelect.innerHTML = '<option value="">-- 보관된 템플릿 선택 --</option>';
+      Object.keys(presets).forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = `${name} (${presets[name].masks?.length || 0}개 마스크)`;
+        this.presetSelect.appendChild(opt);
+      });
+    } catch {
+      // 로컬스토리지 오류 무시
+    }
+  }
+
+  saveLocalPreset() {
+    const name = this.presetNameInput.value.trim();
+    if (!name) {
+      this.showToast('템플릿 이름을 입력해주세요 (예: 1반 퀴즈)', 'error');
+      this.presetNameInput.focus();
+      return;
+    }
+
+    const currentMasks = this.getCurrentMasks();
+    if (currentMasks.length === 0) {
+      this.showToast('저장할 가림판이 없습니다. 먼저 가림판을 생성해주세요.', 'error');
+      return;
+    }
+
+    try {
+      const presets = JSON.parse(localStorage.getItem('masking_remover_presets') || localStorage.getItem('edumask_presets') || '{}');
+      presets[name] = {
+        savedAt: new Date().toISOString(),
+        masks: JSON.parse(JSON.stringify(currentMasks)).map(m => {
+          m.isRevealed = false;
+          return m;
+        })
+      };
+      localStorage.setItem('masking_remover_presets', JSON.stringify(presets));
+      this.initLocalPresets();
+      this.presetSelect.value = name;
+      this.presetNameInput.value = '';
+      this.showToast(`'${name}' 템플릿이 브라우저 보관함에 저장되었습니다.`);
+    } catch (err) {
+      console.error(err);
+      this.showToast('템플릿 저장 중 오류가 발생했습니다.', 'error');
+    }
+  }
+
+  loadLocalPreset() {
+    const name = this.presetSelect.value;
+    if (!name) {
+      this.showToast('불러올 템플릿을 목록에서 선택해주세요.', 'error');
+      return;
+    }
+
+    try {
+      const presets = JSON.parse(localStorage.getItem('masking_remover_presets') || localStorage.getItem('edumask_presets') || '{}');
+      const preset = presets[name];
+      if (preset && preset.masks) {
+        this.pageMasks[this.currentPage] = JSON.parse(JSON.stringify(preset.masks));
+        this.revealHistory = [];
+        this.renderMasks();
+        this.updateUI();
+        if (this.isWordCardOpen) this.renderWordCard();
+        this.showToast(`'${name}' 템플릿 마스킹이 현재 화면에 적용되었습니다.`);
+      }
+    } catch (err) {
+      console.error(err);
+      this.showToast('템플릿 적용에 실패했습니다.', 'error');
+    }
+  }
+
+  deleteLocalPreset() {
+    const name = this.presetSelect.value;
+    if (!name) {
+      this.showToast('삭제할 템플릿을 선택해주세요.', 'error');
+      return;
+    }
+
+    if (confirm(`'${name}' 템플릿을 보관함에서 삭제하시겠습니까?`)) {
+      try {
+        const presets = JSON.parse(localStorage.getItem('masking_remover_presets') || localStorage.getItem('edumask_presets') || '{}');
+        delete presets[name];
+        localStorage.setItem('masking_remover_presets', JSON.stringify(presets));
+        this.initLocalPresets();
+        this.showToast(`'${name}' 템플릿이 삭제되었습니다.`);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+
   exportToJson() {
     const exportData = {
-      app: 'EduMask',
-      version: '1.0.0',
+      app: 'Masking Remover',
+      version: '1.1.0',
       exportedAt: new Date().toISOString(),
       totalPages: this.totalPages,
       pageMasks: this.pageMasks
@@ -877,10 +1425,10 @@ class EduMaskApp {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `edumask_preset_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `masking_remover_preset_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    this.showToast('가림판 설정 파일(.json)이 저장되었습니다.');
+    this.showToast('가림판 텍스트 및 설정 파일(.json)이 저장되었습니다.');
   }
 
   importFromJson(e) {
@@ -898,7 +1446,7 @@ class EduMaskApp {
           this.updateUI();
           this.showToast('가림판 설정을 성공적으로 불러왔습니다.');
         } else {
-          this.showToast('올바른 EduMask 설정 파일이 아닙니다.', 'error');
+          this.showToast('올바른 Masking Remover 설정 파일이 아닙니다.', 'error');
         }
       } catch (err) {
         console.error(err);
@@ -910,7 +1458,7 @@ class EduMaskApp {
   }
 
   /* -------------------------------------------------------------
-   * 12. 유틸리티 (웹 오디오 톤 & 토스트)
+   * 13. 유틸리티 (오디오 톤 & 토스트)
    * ----------------------------------------------------------- */
   playTone(freq, duration) {
     try {
@@ -937,7 +1485,7 @@ class EduMaskApp {
       osc.start();
       osc.stop(this.audioCtx.currentTime + duration);
     } catch {
-      // 오디오 미지원 환경 무시
+      // 오디오 미지원 브라우저 무시
     }
   }
 
@@ -971,5 +1519,6 @@ class EduMaskApp {
 
 // 브라우저 로드 시 앱 인스턴스 초기화
 window.addEventListener('DOMContentLoaded', () => {
-  window.eduMaskApp = new EduMaskApp();
+  window.maskingRemoverApp = new MaskingRemoverApp();
+  window.eduMaskApp = window.maskingRemoverApp; // 하위 호환성 유지
 });

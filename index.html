@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EduMask - 수업용 가림판 및 순차 공개 도구</title>
+  <title>Masking Remover - 수업용 가림판 및 순차 공개 도구</title>
   <link rel="stylesheet" href="style.css">
   <!-- PDF.js CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -33,7 +33,7 @@
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
           <line x1="9" y1="3" x2="9" y2="21"></line>
         </svg>
-        EduMask
+        Masking Remover
       </div>
       <span class="app-title">수업용 가림판 도구</span>
     </div>
@@ -68,6 +68,17 @@
           <line x1="12" y1="3" x2="12" y2="15"></line>
         </svg>
         파일 열기
+      </button>
+
+      <div class="divider"></div>
+
+      <!-- 단어 카드 모드 -->
+      <button id="wordCardModeBtn" class="btn btn-sm" title="단어 카드 포커스 모드 (C)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+          <path d="M7 15h10M7 9h10"></path>
+        </svg>
+        단어 카드
       </button>
 
       <div class="divider"></div>
@@ -169,15 +180,37 @@
 
         <!-- 사전 준비 저장 & 불러오기 -->
         <div class="section-card">
-          <div class="section-card-title">수업 준비 데이터 관리</div>
+          <div class="section-card-title">마스킹 템플릿(프리셋) 관리</div>
+          
+          <!-- 브라우저 보관함 빠른 선택 & 저장 -->
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <div style="display: flex; gap: 0.4rem;">
+              <input type="text" id="presetNameInput" class="mask-text-input" placeholder="새 템플릿 이름 (예: 1반 퀴즈)" style="margin: 0; flex: 1;">
+              <button id="saveLocalPresetBtn" class="btn btn-sm btn-primary" title="현재 마스킹 정보를 브라우저 보관함에 저장합니다">저장</button>
+            </div>
+            
+            <div style="display: flex; gap: 0.4rem; align-items: center;">
+              <select id="presetSelect" class="mask-text-input" style="margin: 0; flex: 1; padding: 0.3rem; cursor: pointer;">
+                <option value="">-- 보관된 템플릿 선택 --</option>
+              </select>
+              <button id="loadLocalPresetBtn" class="btn btn-sm" title="선택한 템플릿 마스킹 적용">적용</button>
+              <button id="deleteLocalPresetBtn" class="btn btn-sm btn-danger" title="선택한 템플릿 삭제">&times;</button>
+            </div>
+          </div>
+
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.6rem; line-height: 1.4;">
+            💡 원본 파일과 분리된 독립 <strong>.json 템플릿</strong>으로 보관되어 다른 수업 시간이나 다른 교재에도 그대로 불러올 수 있습니다.
+          </div>
+
+          <!-- 외부 JSON 파일 저장 & 불러오기 -->
           <div style="display: flex; gap: 0.5rem;">
-            <button id="exportJsonBtn" class="btn btn-sm" style="flex: 1;" title="설정한 가림판 위치를 JSON 파일로 저장합니다">
+            <button id="exportJsonBtn" class="btn btn-sm" style="flex: 1;" title="마스킹 정보만 포함된 JSON 파일로 저장합니다">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                 <polyline points="7 10 12 15 17 10"></polyline>
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
-              설정 저장
+              파일로 저장 (.json)
             </button>
             <button id="importJsonBtn" class="btn btn-sm" style="flex: 1;" title="저장해 둔 가림판 JSON 설정을 불러옵니다">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -185,10 +218,45 @@
                 <polyline points="17 8 12 3 7 8"></polyline>
                 <line x1="12" y1="3" x2="12" y2="15"></line>
               </svg>
-              불러오기
+              파일 불러오기
             </button>
             <input type="file" id="jsonFileInput" accept=".json" style="display: none;">
           </div>
+        </div>
+
+        <!-- 사이드바 맨 하단 수업용 단축키 안내 -->
+        <div class="section-card" style="margin-top: auto;">
+          <div class="section-card-title">수업용 빠른 단축키</div>
+          <table class="sidebar-shortcuts-table">
+            <tr>
+              <td><span class="shortcut-key-badge">Space</span> / <span class="shortcut-key-badge">→</span></td>
+              <td>다음 가림판 공개</td>
+            </tr>
+            <tr>
+              <td><span class="shortcut-key-badge">←</span></td>
+              <td>이전 가림판 복구</td>
+            </tr>
+            <tr>
+              <td><span class="shortcut-key-badge">C</span></td>
+              <td>단어 카드 포커스 모드</td>
+            </tr>
+            <tr>
+              <td><span class="shortcut-key-badge">Ctrl + 휠</span></td>
+              <td>화면 확대 / 축소</td>
+            </tr>
+            <tr>
+              <td><span class="shortcut-key-badge">더블클릭</span></td>
+              <td>가림판 힌트/단어 입력</td>
+            </tr>
+            <tr>
+              <td><span class="shortcut-key-badge">F / F11</span></td>
+              <td>전체화면 (가로 맞춤)</td>
+            </tr>
+            <tr>
+              <td><span class="shortcut-key-badge">R</span> / <span class="shortcut-key-badge">A</span></td>
+              <td>다시 가리기 / 모두 공개</td>
+            </tr>
+          </table>
         </div>
       </div>
     </aside>
@@ -214,10 +282,19 @@
         </div>
       </div>
 
-      <!-- 하단 플로팅 수업 진행 컨트롤러 -->
+      <!-- 하단 플로팅 수업 진행 컨트롤러 (드래그 핸들 포함 & 슬림) -->
       <div id="presentationBar" class="presentation-bar">
+        <!-- 드래그 그립 핸들 -->
+        <div id="barDragHandle" class="bar-drag-handle" title="드래그하여 원하는 위치로 이동">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+            <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+            <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+          </svg>
+        </div>
+
         <button id="prevRevealBtn" class="btn" title="이전 가림판 다시 가리기 (←)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
           이전 <span class="key-hint">←</span>
@@ -253,6 +330,59 @@
     </main>
   </div>
 
+  <!-- 단어 카드 포커스 모달 -->
+  <div id="wordCardBackdrop" class="word-card-backdrop">
+    <div class="word-card-wrapper">
+      <div class="word-card-header">
+        <div class="word-card-progress-badge">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+            <path d="M7 8h10M7 11h6"></path>
+          </svg>
+          <span>단어 카드 포커스</span>
+          <span id="wordCardProgress">1 / 1</span>
+        </div>
+        <button id="closeWordCardBtn" class="btn btn-icon-only btn-sm" title="닫기 (Esc)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <!-- 메인 카드 -->
+      <div id="wordCardMain" class="word-card-main" title="클릭하여 내용 공개/가리기 (Enter / 클릭)">
+        <div id="wordCardNum" class="word-card-num-circle">1</div>
+        <div id="wordCardLabel" class="word-card-label">가림판 내용 & 힌트</div>
+        <div id="wordCardText" class="word-card-text-content">텍스트 없음</div>
+
+        <div class="word-card-crop-section">
+          <canvas id="wordCardCropCanvas" class="word-card-crop-canvas"></canvas>
+          <div id="wordCardStateHint" class="word-card-toggle-state-hint">
+            <span>🔒 가림 상태 (클릭 또는 Enter로 공개)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 카드 하단 컨트롤러 -->
+      <div class="word-card-controls">
+        <button id="prevWordCardBtn" class="btn btn-card-nav" title="이전 카드 (←)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          이전 카드 <span class="key-hint">←</span>
+        </button>
+
+        <button id="toggleWordCardBtn" class="btn btn-card-nav" title="공개 / 가리기 토글 (Enter)">
+          공개/가림 토글 <span class="key-hint">Enter</span>
+        </button>
+
+        <button id="nextWordCardBtn" class="btn btn-card-nav btn-primary" title="다음 카드 (Space / →)">
+          다음 카드
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          <span class="key-hint" style="background: rgba(255,255,255,0.25); color: #fff;">Space</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- 단축키 및 도움말 모달 -->
   <div id="helpModal" class="modal-backdrop">
     <div class="modal-card">
@@ -266,11 +396,19 @@
         <table class="shortcut-table">
           <tr>
             <td><span class="shortcut-key-badge">Space</span> 또는 <span class="shortcut-key-badge">→</span></td>
-            <td>다음 순번 가림판 부드럽게 지우기 (정답/내용 공개)</td>
+            <td>다음 순번 가림판 지우기 / 단어 카드 다음장 넘기기</td>
           </tr>
           <tr>
             <td><span class="shortcut-key-badge">←</span></td>
-            <td>방금 공개한 가림판 다시 가리기 (복구)</td>
+            <td>방금 공개한 가림판 복구 / 단어 카드 이전장 이동</td>
+          </tr>
+          <tr>
+            <td><span class="shortcut-key-badge">C</span></td>
+            <td>단어 카드 포커스 모드 열기 / 닫기</td>
+          </tr>
+          <tr>
+            <td><span class="shortcut-key-badge">Ctrl + 휠</span></td>
+            <td>화면 확대 / 축소 (Zoom In / Out)</td>
           </tr>
           <tr>
             <td><span class="shortcut-key-badge">R</span></td>
@@ -281,12 +419,12 @@
             <td>모든 가림판 한 번에 전체 공개</td>
           </tr>
           <tr>
-            <td><span class="shortcut-key-badge">가림판 직접 클릭</span></td>
-            <td>순서와 상관없이 해당 가림판 즉시 지우기/가리기</td>
+            <td><span class="shortcut-key-badge">가림판 더블클릭</span></td>
+            <td>가림판에 힌트/단어 텍스트 직접 입력 및 수정</td>
           </tr>
           <tr>
             <td><span class="shortcut-key-badge">F</span> / <span class="shortcut-key-badge">F11</span></td>
-            <td>전체화면 모드 토글 (빔프로젝터/전자칠판용)</td>
+            <td>전체화면 모드 (자동으로 화면 가로 너비 맞춤)</td>
           </tr>
           <tr>
             <td><span class="shortcut-key-badge">PageUp / PageDown</span></td>
@@ -294,7 +432,7 @@
           </tr>
         </table>
         <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
-          💡 <strong>Tip</strong>: 가림판을 미리 생성한 후 <strong>"설정 저장"</strong> 버튼을 누르면 JSON 파일로 보관할 수 있어, 다음 수업 시간에 바로 불러와 활용할 수 있습니다.
+          💡 <strong>Tip</strong>: 가림판을 미리 생성한 후 <strong>"설정 저장"</strong> 버튼을 누르면 텍스트를 포함한 설정이 JSON 파일로 보관됩니다.
         </div>
       </div>
     </div>
