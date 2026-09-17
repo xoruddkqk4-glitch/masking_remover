@@ -33,6 +33,11 @@ class MaskingRemoverApp {
     this.activeDrawingRect = null;
     this.draggedMaskRowId = null;
 
+    // 현재 작업 중인 문서 및 JSON 파일 상태 (최근 폴더 및 덮어쓰기 연동)
+    this.currentDocumentFileName = null;
+    this.currentJsonFileHandle = null;
+    this.currentJsonFileName = null;
+
     // 오디오 컨텍스트 (효과음용)
     this.audioCtx = null;
 
@@ -96,8 +101,13 @@ class MaskingRemoverApp {
     this.loadLocalPresetBtn = document.getElementById('loadLocalPresetBtn');
     this.deleteLocalPresetBtn = document.getElementById('deleteLocalPresetBtn');
     this.exportJsonBtn = document.getElementById('exportJsonBtn');
+    this.saveAsJsonBtn = document.getElementById('saveAsJsonBtn');
     this.importJsonBtn = document.getElementById('importJsonBtn');
     this.jsonFileInput = document.getElementById('jsonFileInput');
+    this.currentJsonInfo = document.getElementById('currentJsonInfo');
+    this.currentJsonName = document.getElementById('currentJsonName');
+    this.shortcutsSectionCard = document.getElementById('shortcutsSectionCard');
+    this.toggleShortcutsBtn = document.getElementById('toggleShortcutsBtn');
 
     // 하단 프레젠테이션 컨트롤러
     this.presentationBar = document.getElementById('presentationBar');
@@ -154,8 +164,8 @@ class MaskingRemoverApp {
       requestAnimationFrame(() => this.fitToWidth());
     });
 
-    // 파일 업로드
-    this.uploadBtn.addEventListener('click', () => this.fileInput.click());
+    // 파일 업로드 (최근 작업 폴더 연동 showOpenFilePicker 우선 호출)
+    this.uploadBtn.addEventListener('click', () => this.handleOpenWorksheet());
     this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
 
     // 드래그 앤 드롭 파일 로딩 (외부 OS 파일 드래그 시에만 파일 드롭 오버레이 활성화)
@@ -264,7 +274,8 @@ class MaskingRemoverApp {
     this.loadLocalPresetBtn.addEventListener('click', () => this.loadLocalPreset());
     this.deleteLocalPresetBtn.addEventListener('click', () => this.deleteLocalPreset());
     this.exportJsonBtn.addEventListener('click', () => this.exportToJson());
-    this.importJsonBtn.addEventListener('click', () => this.jsonFileInput.click());
+    this.saveAsJsonBtn.addEventListener('click', () => this.saveAsJson());
+    this.importJsonBtn.addEventListener('click', () => this.handleImportJson());
     this.jsonFileInput.addEventListener('change', (e) => this.importFromJson(e));
 
     // PDF 네비게이션
@@ -277,6 +288,14 @@ class MaskingRemoverApp {
     this.helpModal.addEventListener('click', (e) => {
       if (e.target === this.helpModal) this.helpModal.classList.remove('open');
     });
+
+    // 사이드바 단축키 아코디언 토글 (클릭 시 아래로 펼쳐짐/접힘)
+    if (this.toggleShortcutsBtn && this.shortcutsSectionCard) {
+      this.toggleShortcutsBtn.addEventListener('click', () => {
+        const isOpen = this.shortcutsSectionCard.classList.toggle('open');
+        this.toggleShortcutsBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+    }
 
     // 학생용 유인물 인쇄 & PDF 모달 이벤트
     if (this.printHandoutBtn) {
@@ -299,6 +318,14 @@ class MaskingRemoverApp {
 
     // 키보드 단축키
     window.addEventListener('keydown', (e) => this.handleKeyDown(e));
+
+    // 사이드바 하단 단축키 안내 아코디언 토글
+    if (this.toggleShortcutsBtn && this.shortcutsSectionCard) {
+      this.toggleShortcutsBtn.addEventListener('click', () => {
+        const isOpen = this.shortcutsSectionCard.classList.toggle('open');
+        this.toggleShortcutsBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+    }
 
     // 진행상황 패널 마우스/터치 드래그앤드롭 이동 초기화
     this.initDraggablePresentationBar();
@@ -493,6 +520,11 @@ class MaskingRemoverApp {
   }
 
   loadFile(file) {
+    this.currentDocumentFileName = file.name;
+    this.currentJsonFileHandle = null;
+    this.currentJsonFileName = null;
+    this.updateJsonFileIndicator();
+
     const fileName = file.name.toLowerCase();
 
     if (file.type === 'application/pdf' || fileName.endsWith('.pdf')) {
@@ -605,6 +637,11 @@ class MaskingRemoverApp {
    * 5. 샘플 학습지 캔버스 생성 (초기 시연용)
    * ----------------------------------------------------------- */
   loadSampleWorksheet() {
+    this.currentDocumentFileName = 'sample_worksheet';
+    this.currentJsonFileHandle = null;
+    this.currentJsonFileName = null;
+    this.updateJsonFileIndicator();
+
     const w = 1000;
     const h = 720;
     this.updateCanvasDimensions(w, h);
@@ -1798,46 +1835,195 @@ class MaskingRemoverApp {
     }
   }
 
-  exportToJson() {
+  async handleOpenWorksheet() {
+    if ('showOpenFilePicker' in window) {
+      try {
+        const [fileHandle] = await window.showOpenFilePicker({
+          id: 'masking_remover_workspace_dir', // 최근 작업 폴더 ID 공유
+          multiple: false,
+          types: [{
+            description: '학습지 문서 및 이미지 (*.pdf, *.png, *.jpg, *.jpeg, *.webp)',
+            accept: {
+              'application/pdf': ['.pdf'],
+              'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']
+            }
+          }]
+        });
+        const file = await fileHandle.getFile();
+        this.loadFile(file);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return; // 사용자가 선택 취소
+        console.warn('showOpenFilePicker failed for worksheet, falling back to input:', err);
+      }
+    }
+    this.fileInput.click();
+  }
+
+  updateJsonFileIndicator() {
+    if (this.currentJsonInfo && this.currentJsonName) {
+      if (this.currentJsonFileName) {
+        this.currentJsonName.textContent = this.currentJsonFileName;
+        this.currentJsonInfo.style.display = 'block';
+        if (this.exportJsonBtn) {
+          this.exportJsonBtn.title = `'${this.currentJsonFileName}' 파일에 바로 덮어쓰기 저장합니다`;
+        }
+      } else {
+        this.currentJsonInfo.style.display = 'none';
+        if (this.exportJsonBtn) {
+          this.exportJsonBtn.title = '가림판 설정을 저장합니다 (새 파일 저장)';
+        }
+      }
+    }
+  }
+
+  getExportJsonString() {
     const exportData = {
       app: 'Masking Remover',
-      version: '1.1.0',
+      version: '1.2.0',
       exportedAt: new Date().toISOString(),
       totalPages: this.totalPages,
       pageMasks: this.pageMasks
     };
+    return JSON.stringify(exportData, null, 2);
+  }
 
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  // 1. 파일로 저장 (json): 이미 불러온 파일이 있으면 기존 파일에 덮어쓰기, 없으면 최근 작업 폴더를 열어 저장
+  async exportToJson() {
+    // 1-1. 이미 열려 있거나 저장된 JSON 파일 핸들이 있는 경우: 기존 파일에 바로 덮어쓰기
+    if (this.currentJsonFileHandle) {
+      try {
+        const jsonString = this.getExportJsonString();
+        const writable = await this.currentJsonFileHandle.createWritable();
+        await writable.write(jsonString);
+        await writable.close();
+        this.showToast(`'${this.currentJsonFileName || this.currentJsonFileHandle.name}' 파일에 덮어쓰기 저장되었습니다.`);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.warn('Overwriting existing fileHandle failed, falling back to save picker:', err);
+      }
+    }
+
+    // 1-2. 처음 저장하는 경우: 최근 작업 폴더가 열리며 새 파일로 저장
+    await this.saveAsJson();
+  }
+
+  // 2. 다른 파일로 저장 (json): 이미 불러온 파일이 있더라도 최근 작업 폴더를 열고 새 이름으로 저장
+  async saveAsJson() {
+    const jsonString = this.getExportJsonString();
+
+    // 기본 추천 파일명 구성
+    let defaultFileName;
+    if (this.currentJsonFileName) {
+      const nameWithoutExt = this.currentJsonFileName.replace(/\.json$/i, '');
+      defaultFileName = `${nameWithoutExt}_copy.json`;
+    } else if (this.currentDocumentFileName) {
+      const docBase = this.currentDocumentFileName.replace(/\.[^/.]+$/, '');
+      defaultFileName = `${docBase}_masking.json`;
+    } else {
+      defaultFileName = `masking_remover_preset_${new Date().toISOString().slice(0, 10)}.json`;
+    }
+
+    // 최신 브라우저 File System Access API: 최근 작업 폴더(ID: masking_remover_workspace_dir) 자동 열림
+    if ('showSaveFilePicker' in window) {
+      try {
+        const fileHandle = await window.showSaveFilePicker({
+          id: 'masking_remover_workspace_dir',
+          suggestedName: defaultFileName,
+          types: [{
+            description: '가림판 설정 파일 (*.json)',
+            accept: { 'application/json': ['.json'] }
+          }]
+        });
+        const writable = await fileHandle.createWritable();
+        await writable.write(jsonString);
+        await writable.close();
+
+        // 새로 저장한 파일 핸들로 활성 파일 갱신
+        this.currentJsonFileHandle = fileHandle;
+        this.currentJsonFileName = fileHandle.name;
+        this.updateJsonFileIndicator();
+        this.showToast(`'${fileHandle.name}' 파일로 저장되었습니다.`);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return; // 사용자가 저장 취소
+        console.warn('showSaveFilePicker failed, falling back to download link:', err);
+      }
+    }
+
+    // Fallback: 일반 웹 다운로드 링크 방식
+    const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `masking_remover_preset_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = defaultFileName;
     a.click();
     URL.revokeObjectURL(url);
     this.showToast('가림판 텍스트 및 설정 파일(.json)이 저장되었습니다.');
+  }
+
+  // 3. 파일 불러오기: 최근 작업 폴더를 열고 가림판 JSON 파일 선택
+  async handleImportJson() {
+    if ('showOpenFilePicker' in window) {
+      try {
+        const [fileHandle] = await window.showOpenFilePicker({
+          id: 'masking_remover_workspace_dir', // 최근 작업 폴더 ID 공유
+          multiple: false,
+          types: [{
+            description: '가림판 설정 파일 (*.json)',
+            accept: { 'application/json': ['.json'] }
+          }]
+        });
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+
+        // 불러온 파일 핸들 등록 (추후 '파일로 저장' 시 덮어쓰기 연동)
+        this.currentJsonFileHandle = fileHandle;
+        this.currentJsonFileName = fileHandle.name;
+        this.updateJsonFileIndicator();
+
+        this.applyImportedJson(text);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return; // 사용자가 열기 취소
+        console.warn('showOpenFilePicker failed, falling back to input file:', err);
+      }
+    }
+
+    // Fallback: 기존 숨겨진 input[type=file] 방식
+    this.jsonFileInput.click();
+  }
+
+  applyImportedJson(text) {
+    try {
+      const data = JSON.parse(text);
+      if (data.pageMasks) {
+        this.pageMasks = data.pageMasks;
+        this.revealHistory = [];
+        this.renderMasks();
+        this.updateUI();
+        this.showToast('가림판 설정을 성공적으로 불러왔습니다.');
+      } else {
+        this.showToast('올바른 Masking Remover 설정 파일이 아닙니다.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      this.showToast('JSON 파일을 해석하지 못했습니다.', 'error');
+    }
   }
 
   importFromJson(e) {
     const file = e.target.files[0];
     if (!file) return;
 
+    this.currentJsonFileHandle = null;
+    this.currentJsonFileName = file.name;
+    this.updateJsonFileIndicator();
+
     const reader = new FileReader();
     reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target.result);
-        if (data.pageMasks) {
-          this.pageMasks = data.pageMasks;
-          this.revealHistory = [];
-          this.renderMasks();
-          this.updateUI();
-          this.showToast('가림판 설정을 성공적으로 불러왔습니다.');
-        } else {
-          this.showToast('올바른 Masking Remover 설정 파일이 아닙니다.', 'error');
-        }
-      } catch (err) {
-        console.error(err);
-        this.showToast('JSON 파일을 해석하지 못했습니다.', 'error');
-      }
+      this.applyImportedJson(event.target.result);
       e.target.value = '';
     };
     reader.readAsText(file);

@@ -987,6 +987,56 @@ body.is-fullscreen .main-layout {
 }
 
 /* ============================================================
+ * 마스킹 JSON 관리 액션 버튼 - 통일성 있는 단일 행(한 줄) 레이아웃
+ * ========================================================== */
+.json-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.json-action-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.json-action-btn:hover {
+  background-color: var(--bg-panel-subtle);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.1);
+}
+
+.json-action-btn:active {
+  transform: translateY(0);
+}
+
+.json-action-btn svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.json-action-btn:hover svg {
+  opacity: 1;
+}
+
+/* ============================================================
  * 단어 카드 포커스 모드 (Word Card Focus Modal)
  * ========================================================== */
 .word-card-backdrop {
@@ -1187,6 +1237,92 @@ body.is-fullscreen .main-layout {
   font-weight: 600;
 }
 
+/* ============================================================
+ * 사이드바 하단 단축키 아코디언 카드 & 테이블 (클릭 시 아래로 펼쳐짐)
+ * ========================================================== */
+.shortcuts-accordion {
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--bg-panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.shortcuts-accordion:hover {
+  border-color: var(--border-hover);
+}
+
+.shortcuts-accordion.open {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.shortcuts-accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: background-color var(--transition-fast);
+  user-select: none;
+  outline: none;
+}
+
+.shortcuts-accordion-header:hover {
+  background-color: var(--bg-panel-subtle);
+}
+
+.shortcuts-accordion.open .shortcuts-accordion-header {
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-panel-subtle);
+}
+
+.shortcuts-accordion-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.shortcuts-accordion.open .shortcuts-accordion-title {
+  color: var(--accent-primary);
+}
+
+.shortcuts-chevron-icon {
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.shortcuts-accordion.open .shortcuts-chevron-icon {
+  transform: rotate(180deg);
+  color: var(--accent-primary);
+}
+
+.shortcuts-accordion-content {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.32s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+}
+
+.shortcuts-accordion.open .shortcuts-accordion-content {
+  max-height: 420px;
+  opacity: 1;
+}
+
+.shortcuts-accordion-inner {
+  padding: 0.45rem 0.85rem 0.65rem 0.85rem;
+}
+
 /* 사이드바 하단 단축키 안내 테이블 */
 .sidebar-shortcuts-table {
   width: 100%;
@@ -1194,7 +1330,12 @@ body.is-fullscreen .main-layout {
 }
 
 .sidebar-shortcuts-table tr {
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+  transition: background-color var(--transition-fast);
+}
+
+.sidebar-shortcuts-table tr:hover {
+  background-color: rgba(241, 245, 249, 0.6);
 }
 
 .sidebar-shortcuts-table tr:last-child {
@@ -1202,18 +1343,31 @@ body.is-fullscreen .main-layout {
 }
 
 .sidebar-shortcuts-table td {
-  padding: 0.35rem 0;
+  padding: 0.35rem 0.2rem;
   font-size: 0.75rem;
   color: var(--text-secondary);
+  vertical-align: middle;
 }
 
 .sidebar-shortcuts-table td:first-child {
   width: 48%;
+  white-space: nowrap;
 }
 
 .sidebar-shortcuts-table .shortcut-key-badge {
-  padding: 0.15rem 0.35rem;
-  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f8fafc;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 1px 0 #94a3b8;
+  border-radius: 4px;
+  padding: 0.12rem 0.38rem;
+  font-size: 0.68rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 600;
+  color: #334155;
+  line-height: 1.2;
 }
 
 /* ============================================================
