@@ -315,20 +315,26 @@ class MaskingRemoverApp {
     this.canvasWrapper.style.transform = `scale(${this.zoom})`;
     this.zoomLevelText.textContent = `${Math.round(this.zoom * 100)}%`;
 
-    // 줌 배율(scale) 적용 시 브라우저 스크롤 영역이 잘리지 않도록 동적 마진 확보
     const baseHeight = this.renderCanvas.height || 720;
     const baseWidth = this.renderCanvas.width || 1000;
     const scaledHeight = baseHeight * this.zoom;
     const scaledWidth = baseWidth * this.zoom;
 
-    const extraHeight = Math.max(0, scaledHeight - baseHeight);
-    const extraWidth = Math.max(0, scaledWidth - baseWidth);
+    // CSS transform: scale은 레이아웃 박스 크기를 변경하지 않으므로:
+    // 축소 시(zoom <= 1.0)에는 높이 차이만큼 음수 마진을 주어 DOM 박스를 시각적 높이에 완벽 일치시키고,
+    // 확대 시(zoom > 1.0)에는 초과 높이만큼 양수 마진을 주어 문서 하단 끝까지 스크롤을 보장합니다.
+    const heightDiff = scaledHeight - baseHeight;
+    const widthDiff = scaledWidth - baseWidth;
 
-    // 하단에 넉넉한 여백(extraHeight + 100px)을 부여하여 문서 맨 아래 끝까지 시원하게 스크롤 보장
-    this.canvasWrapper.style.marginBottom = `${extraHeight + 100}px`;
-    if (extraWidth > 0) {
-      this.canvasWrapper.style.marginLeft = `${extraWidth / 2}px`;
-      this.canvasWrapper.style.marginRight = `${extraWidth / 2}px`;
+    if (this.zoom > 1.0) {
+      this.canvasWrapper.style.marginBottom = `${heightDiff + 30}px`;
+    } else {
+      this.canvasWrapper.style.marginBottom = `${heightDiff}px`;
+    }
+
+    if (widthDiff > 0) {
+      this.canvasWrapper.style.marginLeft = `${widthDiff / 2}px`;
+      this.canvasWrapper.style.marginRight = `${widthDiff / 2}px`;
     } else {
       this.canvasWrapper.style.marginLeft = '0px';
       this.canvasWrapper.style.marginRight = '0px';
@@ -337,24 +343,25 @@ class MaskingRemoverApp {
 
   fitToPage() {
     if (!this.renderCanvas.width || !this.renderCanvas.height) return;
-    // 가로/세로 여백 40px 확보하여 문서 테두리 그림자까지 잘림 없이 표시
-    const availableWidth = Math.max(100, this.viewportContainer.clientWidth - 48);
-    const availableHeight = Math.max(100, this.viewportContainer.clientHeight - 48);
+    
+    // 뷰포트 패딩과 테두리 그림자(box-shadow)를 감안한 여유 가용 공간 계산
+    const availWidth = Math.max(100, this.viewportContainer.clientWidth - 32);
+    const availHeight = Math.max(100, this.viewportContainer.clientHeight - 32);
 
-    const scaleX = availableWidth / this.renderCanvas.width;
-    const scaleY = availableHeight / this.renderCanvas.height;
+    const scaleX = availWidth / this.renderCanvas.width;
+    const scaleY = availHeight / this.renderCanvas.height;
 
-    // 가로/세로 중 화면 안에 100% 들어오도록 작은 배율 선택 (문서 상하좌우 완전 노출)
-    const fitZoom = Math.min(scaleX, scaleY);
+    // 0.96 안전 계수를 적용하여 하단 카드 테두리까지 화면 상하좌우 어디도 잘림 없이 100% 쏙 들어오게 맞춤
+    const fitZoom = Math.min(scaleX, scaleY) * 0.96;
     this.setZoom(fitZoom);
   }
 
   fitToWidth() {
     if (!this.renderCanvas.width) return;
-    const availableWidth = this.viewportContainer.clientWidth - 48;
+    const availableWidth = Math.max(100, this.viewportContainer.clientWidth - 32);
     const canvasWidth = this.renderCanvas.width;
     if (availableWidth <= 0 || canvasWidth <= 0) return;
-    const calculatedZoom = availableWidth / canvasWidth;
+    const calculatedZoom = (availableWidth / canvasWidth) * 0.98;
     this.setZoom(calculatedZoom);
   }
 
@@ -647,21 +654,21 @@ class MaskingRemoverApp {
 
     // 하단 장식 안내 카드
     c.fillStyle = '#f8fafc';
-    c.fillRect(50, 482, w - 100, 205);
+    c.fillRect(50, 475, w - 100, 190);
     c.strokeStyle = '#93c5fd';
     c.lineWidth = 1.5;
-    c.strokeRect(50, 482, w - 100, 205);
+    c.strokeRect(50, 475, w - 100, 190);
 
     c.fillStyle = '#2563eb';
     c.font = 'bold 17px "Pretendard", sans-serif';
-    c.fillText('💡 Masking Remover 핵심 활용 팁', 70, 515);
+    c.fillText('💡 Masking Remover 핵심 활용 팁', 70, 505);
 
     c.fillStyle = '#475569';
     c.font = '14px "Pretendard", sans-serif';
-    c.fillText('1. 이미 생성된 마스킹 네모 박스는 마우스로 드래그하여 화면 원하는 곳으로 자유롭게 이동할 수 있습니다.', 70, 545);
-    c.fillText('2. 가림판을 더블클릭하여 텍스트를 입력하거나, 상단 [단어 카드(C)]로 2배 대형 플래시 카드 모드를 실행해보세요.', 70, 575);
-    c.fillText('3. Space / 방향키(→)로 다음 가림판을 순서대로 지우고, 전체화면(F) 시 사이드바가 숨겨지며 가로 맞춤됩니다.', 70, 605);
-    c.fillText('4. 교재 파일과 무관하게 왼쪽 패널의 [템플릿 보관함]을 이용해 가림판 구성을 저장하고 언제든 재사용할 수 있습니다.', 70, 635);
+    c.fillText('1. 이미 생성된 마스킹 네모 박스는 마우스로 드래그하여 화면 원하는 곳으로 자유롭게 이동할 수 있습니다.', 70, 533);
+    c.fillText('2. 가림판을 더블클릭하여 텍스트를 입력하거나, 상단 [단어 카드(C)]로 2배 대형 플래시 카드 모드를 실행해보세요.', 70, 561);
+    c.fillText('3. Space / 방향키(→)로 다음 가림판을 순서대로 지우고, 전체화면(F) 시 사이드바가 숨겨지며 가로 맞춤됩니다.', 70, 589);
+    c.fillText('4. 교재 파일과 무관하게 왼쪽 패널의 [템플릿 보관함]을 이용해 가림판 구성을 저장하고 언제든 재사용할 수 있습니다.', 70, 617);
 
     // 기본 샘플 가림판 4개 등록 (텍스트 포함)
     this.pageMasks[1] = [

@@ -453,7 +453,7 @@ body.is-fullscreen .main-layout {
   overflow: auto;
   align-items: center;
   justify-content: flex-start;
-  padding: 1.25rem 1.25rem 5rem 1.25rem;
+  padding: 1rem;
   cursor: default;
 }
 
@@ -464,6 +464,7 @@ body.is-fullscreen .main-layout {
 /* 캔버스 및 마스크 래퍼 */
 .canvas-wrapper {
   position: relative;
+  flex-shrink: 0;
   box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   overflow: hidden;
