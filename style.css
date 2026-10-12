@@ -1003,21 +1003,23 @@ body.is-fullscreen .main-layout {
 }
 
 /* ============================================================
- * 마스킹 JSON 관리 액션 버튼 - 통일성 있는 단일 행(한 줄) 레이아웃
+ * 수업 프로젝트(.mask) 및 마스킹 JSON 관리 액션 버튼 스타일
  * ========================================================== */
+.project-btn-group,
 .json-btn-group {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
 }
 
+.project-action-btn,
 .json-action-btn {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.45rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   font-size: 0.82rem;
   font-weight: 500;
   color: var(--text-primary);
@@ -1031,6 +1033,7 @@ body.is-fullscreen .main-layout {
   box-sizing: border-box;
 }
 
+.project-action-btn:hover,
 .json-action-btn:hover {
   background-color: var(--bg-panel-subtle);
   border-color: var(--accent-primary);
@@ -1039,17 +1042,35 @@ body.is-fullscreen .main-layout {
   box-shadow: 0 2px 5px rgba(37, 99, 235, 0.1);
 }
 
+.project-action-btn:active,
 .json-action-btn:active {
   transform: translateY(0);
 }
 
+.project-action-btn svg,
 .json-action-btn svg {
   flex-shrink: 0;
   opacity: 0.85;
 }
 
+.project-action-btn:hover svg,
 .json-action-btn:hover svg {
   opacity: 1;
+}
+
+/* 주요 저장 액션 버튼(저장하기) 시각적 강조 */
+.project-action-btn.btn-highlight {
+  background-color: var(--accent-subtle);
+  border-color: rgba(37, 99, 235, 0.4);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.project-action-btn.btn-highlight:hover {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
 }
 
 /* ============================================================

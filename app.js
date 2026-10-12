@@ -33,8 +33,12 @@ class MaskingRemoverApp {
     this.activeDrawingRect = null;
     this.draggedMaskRowId = null;
 
-    // 현재 작업 중인 문서 및 JSON 파일 상태 (최근 폴더 및 덮어쓰기 연동)
+    // 현재 작업 중인 문서 바이너리 및 프로젝트(.mask) 파일 상태 (최근 폴더 및 덮어쓰기 연동)
+    this.currentDocumentData = null; // ArrayBuffer (원본 PDF/이미지 바이너리)
+    this.currentDocumentMime = null; // MIME 타입 (application/pdf, image/png 등)
     this.currentDocumentFileName = null;
+    this.currentProjectFileHandle = null; // .mask 프로젝트 파일 핸들
+    this.currentProjectFileName = null; // .mask 프로젝트 파일명
     this.currentJsonFileHandle = null;
     this.currentJsonFileName = null;
 
@@ -106,6 +110,15 @@ class MaskingRemoverApp {
     this.jsonFileInput = document.getElementById('jsonFileInput');
     this.currentJsonInfo = document.getElementById('currentJsonInfo');
     this.currentJsonName = document.getElementById('currentJsonName');
+
+    // 수업 프로젝트 (.mask) 관리 요소
+    this.openProjectBtn = document.getElementById('openProjectBtn');
+    this.saveProjectBtn = document.getElementById('saveProjectBtn');
+    this.saveAsProjectBtn = document.getElementById('saveAsProjectBtn');
+    this.projectFileInput = document.getElementById('projectFileInput');
+    this.currentProjectInfo = document.getElementById('currentProjectInfo');
+    this.currentProjectName = document.getElementById('currentProjectName');
+
     this.shortcutsSectionCard = document.getElementById('shortcutsSectionCard');
     this.toggleShortcutsBtn = document.getElementById('toggleShortcutsBtn');
 
@@ -274,15 +287,29 @@ class MaskingRemoverApp {
       if (e.target === this.wordCardBackdrop) this.closeWordCard();
     });
 
-    // 사이드바 액션 & 템플릿 보관함
+    // 수업 프로젝트 (.mask) 3대 액션 (불러오기 / 저장하기 / 새 이름으로 저장하기)
+    if (this.openProjectBtn) {
+      this.openProjectBtn.addEventListener('click', () => this.openProject());
+    }
+    if (this.saveProjectBtn) {
+      this.saveProjectBtn.addEventListener('click', () => this.exportProject());
+    }
+    if (this.saveAsProjectBtn) {
+      this.saveAsProjectBtn.addEventListener('click', () => this.saveAsProject());
+    }
+    if (this.projectFileInput) {
+      this.projectFileInput.addEventListener('change', (e) => this.handleProjectFileInput(e));
+    }
+
+    // 사이드바 액션 & JSON 보관함
     this.clearAllMasksBtn.addEventListener('click', () => this.clearAllMasks());
-    this.saveLocalPresetBtn.addEventListener('click', () => this.saveLocalPreset());
-    this.loadLocalPresetBtn.addEventListener('click', () => this.loadLocalPreset());
-    this.deleteLocalPresetBtn.addEventListener('click', () => this.deleteLocalPreset());
-    this.exportJsonBtn.addEventListener('click', () => this.exportToJson());
-    this.saveAsJsonBtn.addEventListener('click', () => this.saveAsJson());
-    this.importJsonBtn.addEventListener('click', () => this.handleImportJson());
-    this.jsonFileInput.addEventListener('change', (e) => this.importFromJson(e));
+    if (this.saveLocalPresetBtn) this.saveLocalPresetBtn.addEventListener('click', () => this.saveLocalPreset());
+    if (this.loadLocalPresetBtn) this.loadLocalPresetBtn.addEventListener('click', () => this.loadLocalPreset());
+    if (this.deleteLocalPresetBtn) this.deleteLocalPresetBtn.addEventListener('click', () => this.deleteLocalPreset());
+    if (this.exportJsonBtn) this.exportJsonBtn.addEventListener('click', () => this.exportToJson());
+    if (this.saveAsJsonBtn) this.saveAsJsonBtn.addEventListener('click', () => this.saveAsJson());
+    if (this.importJsonBtn) this.importJsonBtn.addEventListener('click', () => this.handleImportJson());
+    if (this.jsonFileInput) this.jsonFileInput.addEventListener('change', (e) => this.importFromJson(e));
 
     // PDF 네비게이션
     this.prevPageBtn.addEventListener('click', () => this.changePage(this.currentPage - 1));
@@ -529,7 +556,7 @@ class MaskingRemoverApp {
   }
 
   /* -------------------------------------------------------------
-   * 4. 파일 처리 (PDF & 이미지)
+   * 4. 파일 처리 (수업 프로젝트 .mask, PDF & 이미지)
    * ----------------------------------------------------------- */
   handleFileSelect(e) {
     const file = e.target.files[0];
@@ -539,20 +566,184 @@ class MaskingRemoverApp {
     }
   }
 
-  loadFile(file) {
-    this.currentDocumentFileName = file.name;
-    this.currentJsonFileHandle = null;
-    this.currentJsonFileName = null;
-    this.updateJsonFileIndicator();
+  // 상단 [파일 열기] 및 [프로젝트 불러오기]: 항상 최근 작업 폴더가 자동으로 열림
+  async handleOpenWorksheet() {
+    if ('showOpenFilePicker' in window) {
+      try {
+        const [fileHandle] = await window.showOpenFilePicker({
+          id: 'masking_remover_workspace_dir', // 항상 최근 작업 폴더 기억 & 열림
+          multiple: false,
+          types: [{
+            description: '수업 프로젝트 및 교재 (*.mask, *.pdf, 이미지)',
+            accept: {
+              'application/octet-stream': ['.mask'],
+              'application/pdf': ['.pdf'],
+              'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'],
+              'application/json': ['.json']
+            }
+          }]
+        });
+        const file = await fileHandle.getFile();
+        if (file.name.toLowerCase().endsWith('.mask')) {
+          this.currentProjectFileHandle = fileHandle;
+          this.currentProjectFileName = fileHandle.name;
+        } else {
+          this.currentProjectFileHandle = null;
+          this.currentProjectFileName = null;
+        }
+        await this.loadFile(file);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return; // 사용자가 취소함
+        console.warn('showOpenFilePicker failed, falling back to input:', err);
+      }
+    }
+    // File System Access API 미지원 브라우저 Fallback
+    this.fileInput.click();
+  }
 
+  async loadFile(file) {
     const fileName = file.name.toLowerCase();
+
+    // 1. 원클릭 수업 프로젝트 파일 (.mask)
+    if (fileName.endsWith('.mask')) {
+      await this.loadProjectFile(file);
+      return;
+    }
+
+    // 2. 가림판 독립 설정 파일 (.json)
+    if (fileName.endsWith('.json')) {
+      const reader = new FileReader();
+      reader.onload = (e) => this.applyImportedJson(e.target.result);
+      reader.readAsText(file);
+      return;
+    }
+
+    // 3. 원본 교재 (PDF 또는 이미지) 바이너리 캐싱
+    try {
+      this.currentDocumentData = await file.arrayBuffer();
+    } catch (err) {
+      console.warn('Could not cache arrayBuffer:', err);
+    }
+    this.currentDocumentFileName = file.name;
+    this.currentDocumentMime = file.type || (fileName.endsWith('.pdf') ? 'application/pdf' : 'image/png');
+    this.currentProjectFileHandle = null;
+    this.currentProjectFileName = null;
+    this.updateProjectFileIndicator();
 
     if (file.type === 'application/pdf' || fileName.endsWith('.pdf')) {
       this.loadPdfFile(file);
     } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/i.test(fileName)) {
       this.loadImageFile(file);
     } else {
-      this.showToast('지원하지 않는 파일 형식입니다. PDF 또는 이미지를 선택하세요.', 'error');
+      this.showToast('지원하지 않는 파일 형식입니다. .mask, PDF 또는 이미지를 선택하세요.', 'error');
+    }
+  }
+
+  /**
+   * 원본 교재 바이너리와 전체 페이지 가림판 데이터를 단일 번들로 패키징
+   */
+  async buildProjectBundle() {
+    let base64Data = '';
+    let mime = this.currentDocumentMime || 'application/pdf';
+    let docName = this.currentDocumentFileName || 'document';
+
+    if (this.currentDocumentData) {
+      // 대용량 청크 변환으로 메모리 오버플로우 방지
+      const bytes = new Uint8Array(this.currentDocumentData);
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const sub = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+        binary += String.fromCharCode.apply(null, sub);
+      }
+      base64Data = `data:${mime};base64,${btoa(binary)}`;
+    } else {
+      // 캔버스에 직접 그린 샘플 교재의 경우 PNG Data URL로 직렬화
+      base64Data = this.renderCanvas.toDataURL('image/png');
+      mime = 'image/png';
+      docName = 'sample_worksheet.png';
+    }
+
+    return {
+      format: 'masking_remover_project',
+      version: '2.0.0',
+      exportedAt: new Date().toISOString(),
+      document: {
+        fileName: docName,
+        fileType: mime,
+        fileData: base64Data
+      },
+      totalPages: this.totalPages || 1,
+      currentPage: this.currentPage || 1,
+      pageMasks: this.pageMasks
+    };
+  }
+
+  /**
+   * .mask 수업 프로젝트 파일 열기: 원본 교재 렌더링 + 전체 가림판 즉시 100% 동시 복원
+   */
+  async loadProjectFile(file) {
+    this.showToast('수업 프로젝트 파일을 불러오는 중입니다...');
+    try {
+      const text = await file.text();
+      const project = JSON.parse(text);
+
+      if (project.format !== 'masking_remover_project' || !project.document || !project.document.fileData) {
+        this.showToast('올바른 Masking Remover 프로젝트 파일(.mask)이 아닙니다.', 'error');
+        return;
+      }
+
+      // 1. Data URL ➔ ArrayBuffer 디코딩
+      const res = await fetch(project.document.fileData);
+      const blob = await res.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+
+      this.currentDocumentData = arrayBuffer;
+      this.currentDocumentMime = project.document.fileType || blob.type;
+      this.currentDocumentFileName = project.document.fileName || file.name.replace(/\.mask$/i, '');
+      this.currentProjectFileName = file.name;
+      this.updateProjectFileIndicator();
+
+      // 2. 가림판 데이터 주입
+      this.pageMasks = project.pageMasks || { 1: [] };
+      this.revealHistory = [];
+
+      // 3. 교재 문서 렌더링
+      const isPdf = this.currentDocumentMime === 'application/pdf' || (this.currentDocumentFileName && this.currentDocumentFileName.toLowerCase().endsWith('.pdf'));
+
+      if (isPdf && window.pdfjsLib) {
+        const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+        this.pdfDoc = await loadingTask.promise;
+        this.docType = 'pdf';
+        this.currentImage = null;
+        this.totalPages = this.pdfDoc.numPages;
+        this.currentPage = project.currentPage && project.currentPage <= this.totalPages ? project.currentPage : 1;
+        this.pdfNavBar.style.display = 'flex';
+        await this.renderPdfPage(this.currentPage);
+        this.fitToPage();
+      } else {
+        // 이미지 교재 복원
+        const img = new Image();
+        img.onload = () => {
+          this.docType = 'image';
+          this.currentImage = img;
+          this.pdfDoc = null;
+          this.currentPage = 1;
+          this.totalPages = 1;
+          this.pdfNavBar.style.display = 'none';
+          this.renderImage(img);
+          this.fitToPage();
+          this.renderMasks();
+          this.updateUI();
+        };
+        img.src = project.document.fileData;
+      }
+
+      this.showToast(`'${file.name}' 수업 프로젝트가 성공적으로 열렸습니다. (교재 및 가림판 복원 완료)`);
+    } catch (err) {
+      console.error('프로젝트 로드 실패:', err);
+      this.showToast('프로젝트 파일을 불러오지 못했습니다.', 'error');
     }
   }
 
@@ -1722,6 +1913,24 @@ class MaskingRemoverApp {
       return;
     }
 
+    // Ctrl + S / Ctrl + Shift + S: 수업 프로젝트 저장 단축키
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        this.saveAsProject();
+      } else {
+        this.exportProject();
+      }
+      return;
+    }
+
+    // Ctrl + O: 수업 프로젝트 불러오기 단축키
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) {
+      e.preventDefault();
+      this.openProject();
+      return;
+    }
+
     // Ctrl + P: 학생용 유인물 인쇄 및 PDF 저장 모달 단축키
     if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
       e.preventDefault();
@@ -1867,29 +2076,113 @@ class MaskingRemoverApp {
     }
   }
 
-  async handleOpenWorksheet() {
-    if ('showOpenFilePicker' in window) {
+  /* -------------------------------------------------------------
+   * 12. 수업 프로젝트 (.mask) 및 가림판 JSON 파일 관리 엔진
+   * ----------------------------------------------------------- */
+
+  // 1. 수업 프로젝트 불러오기 (Ctrl + O)
+  async openProject() {
+    await this.handleOpenWorksheet();
+  }
+
+  // 2. 수업 프로젝트 저장하기 (Ctrl + S - 스마트 덮어쓰기 지원)
+  async exportProject() {
+    if (this.currentProjectFileHandle) {
       try {
-        const [fileHandle] = await window.showOpenFilePicker({
-          id: 'masking_remover_workspace_dir', // 최근 작업 폴더 ID 공유
-          multiple: false,
-          types: [{
-            description: '학습지 문서 및 이미지 (*.pdf, *.png, *.jpg, *.jpeg, *.webp)',
-            accept: {
-              'application/pdf': ['.pdf'],
-              'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']
-            }
-          }]
-        });
-        const file = await fileHandle.getFile();
-        this.loadFile(file);
+        const bundle = await this.buildProjectBundle();
+        const jsonString = JSON.stringify(bundle, null, 2);
+        const writable = await this.currentProjectFileHandle.createWritable();
+        await writable.write(jsonString);
+        await writable.close();
+        this.showToast(`'${this.currentProjectFileName || this.currentProjectFileHandle.name}' 프로젝트 파일에 저장되었습니다.`);
         return;
       } catch (err) {
-        if (err.name === 'AbortError') return; // 사용자가 선택 취소
-        console.warn('showOpenFilePicker failed for worksheet, falling back to input:', err);
+        if (err.name === 'AbortError') return;
+        console.warn('Overwriting project failed, falling back to save picker:', err);
       }
     }
-    this.fileInput.click();
+    // 기존에 연결된 파일이 없으면 새 파일 저장 실행
+    await this.saveAsProject();
+  }
+
+  // 3. 수업 프로젝트 새 이름으로 저장하기 (Ctrl + Shift + S - 항상 최근 폴더 열림)
+  async saveAsProject() {
+    let defaultFileName;
+    if (this.currentProjectFileName) {
+      const base = this.currentProjectFileName.replace(/\.mask$/i, '');
+      defaultFileName = `${base}_copy.mask`;
+    } else if (this.currentDocumentFileName) {
+      const base = this.currentDocumentFileName.replace(/\.[^/.]+$/, '');
+      defaultFileName = `${base}_수업.mask`;
+    } else {
+      defaultFileName = `수업프로젝트_${new Date().toISOString().slice(0, 10)}.mask`;
+    }
+
+    const bundle = await this.buildProjectBundle();
+    const jsonString = JSON.stringify(bundle, null, 2);
+
+    // 최신 브라우저 File System Access API (최근 작업 폴더 ID 공유)
+    if ('showSaveFilePicker' in window) {
+      try {
+        const fileHandle = await window.showSaveFilePicker({
+          id: 'masking_remover_workspace_dir', // 항상 동일한 최근 작업 폴더 열림!
+          suggestedName: defaultFileName,
+          types: [{
+            description: '수업 프로젝트 파일 (*.mask)',
+            accept: { 'application/json': ['.mask'] }
+          }]
+        });
+
+        const writable = await fileHandle.createWritable();
+        await writable.write(jsonString);
+        await writable.close();
+
+        this.currentProjectFileHandle = fileHandle;
+        this.currentProjectFileName = fileHandle.name;
+        this.updateProjectFileIndicator();
+        this.showToast(`'${fileHandle.name}' 수업 프로젝트 파일이 저장되었습니다.`);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return; // 사용자가 취소
+        console.warn('showSaveFilePicker failed, falling back to download link:', err);
+      }
+    }
+
+    // 일반 웹 다운로드 Fallback
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = defaultFileName;
+    a.click();
+    URL.revokeObjectURL(url);
+    this.currentProjectFileName = defaultFileName;
+    this.updateProjectFileIndicator();
+    this.showToast(`'${defaultFileName}' 수업 프로젝트 파일이 저장되었습니다.`);
+  }
+
+  handleProjectFileInput(e) {
+    const file = e.target.files[0];
+    if (file) {
+      this.loadFile(file);
+      e.target.value = '';
+    }
+  }
+
+  updateProjectFileIndicator() {
+    if (!this.currentProjectInfo || !this.currentProjectName) return;
+    if (this.currentProjectFileName) {
+      this.currentProjectName.textContent = this.currentProjectFileName;
+      this.currentProjectInfo.style.display = 'block';
+      if (this.saveProjectBtn) {
+        this.saveProjectBtn.title = `'${this.currentProjectFileName}' 파일에 바로 덮어쓰기 저장합니다 (Ctrl + S)`;
+      }
+    } else {
+      this.currentProjectInfo.style.display = 'none';
+      if (this.saveProjectBtn) {
+        this.saveProjectBtn.title = '현재 수업 프로젝트를 새 파일로 저장합니다 (Ctrl + S)';
+      }
+    }
   }
 
   updateJsonFileIndicator() {
