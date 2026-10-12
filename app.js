@@ -147,6 +147,12 @@ class MaskingRemoverApp {
     this.downloadPdfDirectBtn = document.getElementById('downloadPdfDirectBtn');
     this.printBrowserDialogBtn = document.getElementById('printBrowserDialogBtn');
     this.maskAllForPrintCheckbox = document.getElementById('maskAllForPrintCheckbox');
+    this.printPageRangeSection = document.getElementById('printPageRangeSection');
+    this.printRangeAll = document.getElementById('printRangeAll');
+    this.printRangeCurrent = document.getElementById('printRangeCurrent');
+    this.printTotalPagesCount = document.getElementById('printTotalPagesCount');
+    this.printCurrentPageNum = document.getElementById('printCurrentPageNum');
+    this.printMultiPageContainer = document.getElementById('printMultiPageContainer');
   }
 
   /* -------------------------------------------------------------
@@ -281,6 +287,20 @@ class MaskingRemoverApp {
     // PDF 네비게이션
     this.prevPageBtn.addEventListener('click', () => this.changePage(this.currentPage - 1));
     this.nextPageBtn.addEventListener('click', () => this.changePage(this.currentPage + 1));
+    if (this.pageIndicator) {
+      this.pageIndicator.addEventListener('click', () => {
+        if (!this.pdfDoc || this.totalPages <= 1) return;
+        const target = prompt(`이동할 페이지 번호를 입력하세요 (1 ~ ${this.totalPages}):`, this.currentPage);
+        if (target !== null) {
+          const p = parseInt(target.trim(), 10);
+          if (!isNaN(p) && p >= 1 && p <= this.totalPages) {
+            this.changePage(p);
+          } else if (target.trim() !== '') {
+            this.showToast(`1부터 ${this.totalPages} 사이의 올바른 페이지 번호를 입력하세요.`, 'error');
+          }
+        }
+      });
+    }
 
     // 도움말 모달
     this.helpBtn.addEventListener('click', () => this.helpModal.classList.add('open'));
@@ -589,7 +609,11 @@ class MaskingRemoverApp {
       this.pdfNavBar.style.display = 'flex';
       await this.renderPdfPage(this.currentPage);
       this.fitToPage();
-      this.showToast(`PDF 로드 완료: ${file.name} (총 ${this.totalPages}페이지)`);
+      if (this.totalPages > 1) {
+        this.showToast(`PDF 로드 완료: ${file.name} (총 ${this.totalPages}쪽 - 상단 바 및 PageUp/PageDown 키로 이동)`);
+      } else {
+        this.showToast(`PDF 로드 완료: ${file.name} (총 1쪽)`);
+      }
     } catch (err) {
       console.error('PDF 로드 실패:', err);
       this.showToast('PDF 파일을 불러오지 못했습니다.', 'error');
@@ -614,7 +638,15 @@ class MaskingRemoverApp {
 
       await page.render(renderContext).promise;
 
-      this.pageIndicator.textContent = `${this.currentPage} / ${this.totalPages}`;
+      if (this.pageIndicator) {
+        this.pageIndicator.textContent = `${this.currentPage} / ${this.totalPages}`;
+        this.pageIndicator.title = `현재 ${this.currentPage}쪽 / 전체 ${this.totalPages}쪽 (클릭하여 페이지 바로 이동)`;
+      }
+      if (this.prevPageBtn) this.prevPageBtn.disabled = this.currentPage <= 1;
+      if (this.nextPageBtn) this.nextPageBtn.disabled = this.currentPage >= this.totalPages;
+      if (this.printCurrentPageNum) this.printCurrentPageNum.textContent = this.currentPage;
+      if (this.printTotalPagesCount) this.printTotalPagesCount.textContent = this.totalPages;
+
       if (!this.pageMasks[this.currentPage]) {
         this.pageMasks[this.currentPage] = [];
       }
@@ -2034,6 +2066,16 @@ class MaskingRemoverApp {
    * ----------------------------------------------------------- */
   openPrintHandoutModal() {
     if (this.printModal) {
+      if (this.printPageRangeSection) {
+        if (this.docType === 'pdf' && this.totalPages > 1) {
+          this.printPageRangeSection.style.display = 'flex';
+          if (this.printTotalPagesCount) this.printTotalPagesCount.textContent = this.totalPages;
+          if (this.printCurrentPageNum) this.printCurrentPageNum.textContent = this.currentPage;
+          if (this.printRangeAll) this.printRangeAll.checked = true;
+        } else {
+          this.printPageRangeSection.style.display = 'none';
+        }
+      }
       this.printModal.classList.add('open');
     }
   }
@@ -2044,94 +2086,172 @@ class MaskingRemoverApp {
     }
   }
 
+  /**
+   * 학생용 유인물 인쇄(@media print) 스타일과 100% 동일하게 캔버스에 가림판(빈칸)을 그립니다.
+   * 번호 배지를 박스 상단 외부 좌측 모서리에 콤팩트하게 배치하여 박스 내부 필기 공간을 온전히 확보합니다.
+   */
+  drawHandoutMasksOnCanvas(ctx, masks, w, h, maskAll) {
+    if (!masks || masks.length === 0) return;
+
+    // 인쇄용 고해상도 캔버스 폭(w)에 맞춘 콤팩트 스케일 계산 (기준 폭: 900px)
+    const scale = Math.max(0.85, Math.min(2.0, w / 900));
+
+    // 유인물 인쇄 CSS(.mask-badge: 18px x 18px, 폰트 11px)와 동일한 배지 치수
+    const badgeW = Math.max(18, Math.round(20 * scale));
+    const badgeH = Math.max(18, Math.round(18 * scale));
+    const fontSize = Math.max(10, Math.round(11 * scale));
+    const boxBorderW = Math.max(1.5, Math.round(2 * scale));
+
+    masks.forEach((mask) => {
+      // '모든 가림판 가리기' 옵션이 해제된 경우에만 이미 공개된 마스크 건너뜀
+      if (!maskAll && mask.isRevealed) return;
+
+      const mx = Math.round(mask.x * w);
+      const my = Math.round(mask.y * h);
+      const mw = Math.round(mask.w * w);
+      const mh = Math.round(mask.h * h);
+
+      ctx.save();
+
+      // 1. 유인물 빈칸 박스 (깔끔한 테두리와 연한 음영: CSS .mask-box와 100% 동일)
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(mx, my, mw, mh);
+
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = boxBorderW;
+      ctx.strokeRect(mx, my, mw, mh);
+
+      // 2. 힌트/메모 텍스트가 있을 경우 학생용 빈칸 내부 좌측에 연한 색상으로 작게 표시
+      if (mask.text && mask.text.trim()) {
+        ctx.font = `${Math.max(10, Math.round(fontSize * 0.95))}px "Pretendard", -apple-system, sans-serif`;
+        ctx.fillStyle = '#64748b';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        const padX = Math.round(8 * scale);
+        const maxTextW = Math.max(20, mw - padX * 2);
+        ctx.fillText(mask.text, mx + padX, my + mh / 2, maxTextW);
+      }
+
+      // 3. 순번 배지 (마스킹 상단 외부 모서리에 독립 배치하여 내부 필기 공간 100% 확보)
+      // CSS top: -10px, left: 0 비율 적용
+      let badgeX = mx;
+      let badgeY = my - Math.round(10 * scale);
+      if (badgeY < 2) {
+        badgeY = my + 2; // 상단 잘림 방지 안전 보정
+      }
+
+      ctx.fillStyle = '#334155';
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+
+      const radius = Math.round(3 * scale);
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, radius);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+        ctx.strokeRect(badgeX, badgeY, badgeW, badgeH);
+      }
+
+      // 배지 번호 텍스트
+      ctx.font = `bold ${fontSize}px "Pretendard", -apple-system, sans-serif`;
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(mask.order), badgeX + badgeW / 2, badgeY + badgeH / 2 + 1);
+
+      ctx.restore();
+    });
+  }
+
   async exportStudentPdf() {
     this.showToast('학생용 유인물 PDF를 생성 중입니다...');
     try {
-      const offscreen = document.createElement('canvas');
-      const w = this.renderCanvas.width;
-      const h = this.renderCanvas.height;
-      if (!w || !h) {
-        this.showToast('인쇄할 문서가 준비되지 않았습니다.', 'error');
+      const maskAll = this.maskAllForPrintCheckbox ? this.maskAllForPrintCheckbox.checked : true;
+      const isPdfMulti = this.docType === 'pdf' && this.pdfDoc && this.totalPages > 1;
+      const exportAllPages = isPdfMulti && (this.printRangeAll ? this.printRangeAll.checked : true);
+
+      if (!window.jspdf || !window.jspdf.jsPDF) {
+        this.showToast('jsPDF 라이브러리를 불러오지 못했습니다. 브라우저 인쇄를 이용해주세요.', 'error');
         return;
       }
 
-      offscreen.width = w;
-      offscreen.height = h;
-      const ctx = offscreen.getContext('2d');
+      const { jsPDF } = window.jspdf;
+      let pdf = null;
+      const baseName = (this.currentDocumentFileName || '학생용_유인물').replace(/\.[^/.]+$/, '');
 
-      // 1. 원본 캔버스 복사
-      ctx.drawImage(this.renderCanvas, 0, 0);
+      if (exportAllPages) {
+        const total = this.totalPages;
+        for (let p = 1; p <= total; p++) {
+          this.showToast(`학생용 PDF 생성 중... (${p} / ${total}쪽)`);
+          const page = await this.pdfDoc.getPage(p);
+          const viewport = page.getViewport({ scale: 1.5 });
 
-      // 2. 마스킹 가림판(빈칸) 합성
-      const masks = this.getCurrentMasks();
-      const maskAll = this.maskAllForPrintCheckbox ? this.maskAllForPrintCheckbox.checked : true;
+          const offscreen = document.createElement('canvas');
+          offscreen.width = Math.round(viewport.width);
+          offscreen.height = Math.round(viewport.height);
+          const ctx = offscreen.getContext('2d');
 
-      masks.forEach((mask) => {
-        // '모든 가림판 가리기' 옵션이 해제된 경우에만 이미 공개된 마스크 건너뜀
-        if (!maskAll && mask.isRevealed) return;
+          // 1. 원본 PDF 페이지 렌더링
+          await page.render({
+            canvasContext: ctx,
+            viewport: viewport
+          }).promise;
 
-        const mx = mask.x * w;
-        const my = mask.y * h;
-        const mw = mask.w * w;
-        const mh = mask.h * h;
+          // 2. 해당 페이지 마스킹 합성 (유인물 인쇄와 동일한 스타일)
+          const pageMasks = this.pageMasks[p] || [];
+          this.drawHandoutMasksOnCanvas(ctx, pageMasks, offscreen.width, offscreen.height, maskAll);
 
-        ctx.save();
+          // 3. jsPDF에 페이지 추가
+          const isLandscape = offscreen.width > offscreen.height;
+          const pdfW = offscreen.width * 0.75;
+          const pdfH = offscreen.height * 0.75;
 
-        // 학생용 유인물 빈칸 박스 (깔끔한 테두리와 음영)
-        ctx.fillStyle = mask.style === 'sticky' ? '#fef9c3' : (mask.style === 'blue' ? '#eff6ff' : '#f8fafc');
-        ctx.fillRect(mx, my, mw, mh);
+          if (!pdf) {
+            pdf = new jsPDF({
+              orientation: isLandscape ? 'landscape' : 'portrait',
+              unit: 'pt',
+              format: [pdfW, pdfH]
+            });
+          } else {
+            pdf.addPage([pdfW, pdfH], isLandscape ? 'landscape' : 'portrait');
+          }
 
-        ctx.strokeStyle = mask.style === 'sticky' ? '#ca8a04' : (mask.style === 'blue' ? '#2563eb' : '#334155');
-        ctx.lineWidth = Math.max(1.5, Math.min(3, Math.round(mh * 0.06)));
-        ctx.strokeRect(mx, my, mw, mh);
-
-        // 왼쪽 정렬 번호 배지 & 텍스트 렌더링
-        const fontSize = Math.max(11, Math.min(22, Math.round(mh * 0.55)));
-        ctx.font = `bold ${fontSize}px "Pretendard", -apple-system, sans-serif`;
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'left';
-
-        const badgeW = Math.max(20, Math.round(fontSize * 1.5));
-        const badgeH = Math.max(18, Math.round(fontSize * 1.3));
-        const badgeX = mx + Math.max(6, Math.round(mw * 0.02));
-        const badgeY = my + (mh - badgeH) / 2;
-
-        // 배지 배경
-        ctx.fillStyle = mask.style === 'sticky' ? '#ca8a04' : (mask.style === 'blue' ? '#2563eb' : '#334155');
-        if (ctx.roundRect) {
-          ctx.beginPath();
-          ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
-          ctx.fill();
-        } else {
-          ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+          const imgData = offscreen.toDataURL('image/jpeg', 0.95);
+          pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
         }
 
-        // 배지 숫자 (배지 사각형 중심)
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.fillText(String(mask.order), badgeX + badgeW / 2, badgeY + badgeH / 2 + 1);
-
-        // 추가 힌트/텍스트가 등록되어 있을 경우 왼쪽에 순차 배치
-        if (mask.text && mask.text.trim()) {
-          ctx.textAlign = 'left';
-          ctx.fillStyle = mask.style === 'sticky' ? '#713f12' : '#0f172a';
-          const textStartX = badgeX + badgeW + 8;
-          const maxTextW = Math.max(20, mx + mw - textStartX - 6);
-          ctx.fillText(mask.text, textStartX, my + mh / 2, maxTextW);
+        const fileName = `${baseName}_유인물_전체(${total}쪽).pdf`;
+        pdf.save(fileName);
+        this.showToast(`학생용 유인물 PDF 다운로드 완료: ${fileName}`);
+      } else {
+        // 단일 페이지 (이미지, 샘플 교재, 또는 PDF의 현재 선택 페이지만)
+        const w = this.renderCanvas.width;
+        const h = this.renderCanvas.height;
+        if (!w || !h) {
+          this.showToast('인쇄할 문서가 준비되지 않았습니다.', 'error');
+          return;
         }
 
-        ctx.restore();
-      });
+        const offscreen = document.createElement('canvas');
+        offscreen.width = w;
+        offscreen.height = h;
+        const ctx = offscreen.getContext('2d');
 
-      // 3. jsPDF 라이브러리를 통한 고품질 PDF 생성
-      if (window.jspdf && window.jspdf.jsPDF) {
-        const { jsPDF } = window.jspdf;
+        // 1. 원본 캔버스 복사
+        ctx.drawImage(this.renderCanvas, 0, 0);
+
+        // 2. 현재 페이지 마스크 합성
+        const masks = this.getCurrentMasks();
+        this.drawHandoutMasksOnCanvas(ctx, masks, w, h, maskAll);
+
         const isLandscape = w > h;
-        // 포인트(pt) 단위 변환 (픽셀의 75%)
         const pdfW = w * 0.75;
         const pdfH = h * 0.75;
 
-        const pdf = new jsPDF({
+        pdf = new jsPDF({
           orientation: isLandscape ? 'landscape' : 'portrait',
           unit: 'pt',
           format: [pdfW, pdfH]
@@ -2139,17 +2259,12 @@ class MaskingRemoverApp {
 
         const imgData = offscreen.toDataURL('image/jpeg', 0.95);
         pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
-        const fileName = `학생용_유인물_p${this.currentPage}.pdf`;
+
+        const fileName = this.docType === 'pdf' ? `${baseName}_유인물_p${this.currentPage}.pdf` : `${baseName}_유인물.pdf`;
         pdf.save(fileName);
         this.showToast(`학생용 유인물 PDF 다운로드 완료: ${fileName}`);
-      } else {
-        // 라이브러리 미지원 시 고화질 이미지 다운로드 지원
-        const link = document.createElement('a');
-        link.download = `학생용_유인물_p${this.currentPage}.png`;
-        link.href = offscreen.toDataURL('image/png');
-        link.click();
-        this.showToast(`학생용 유인물 이미지 저장 완료 (${link.download})`);
       }
+
       this.closePrintHandoutModal();
     } catch (err) {
       console.error('PDF 생성 실패:', err);
@@ -2157,12 +2272,71 @@ class MaskingRemoverApp {
     }
   }
 
-  printHandout() {
+  async printHandout() {
     this.closePrintHandoutModal();
-    const prevZoom = this.zoom;
-
-    // 모든 가림판 가리기 옵션 처리
     const maskAll = this.maskAllForPrintCheckbox ? this.maskAllForPrintCheckbox.checked : true;
+    const isPdfMulti = this.docType === 'pdf' && this.pdfDoc && this.totalPages > 1;
+    const exportAllPages = isPdfMulti && (this.printRangeAll ? this.printRangeAll.checked : true);
+
+    // 2쪽 이상 다중 페이지 PDF 문서 인쇄 처리
+    if (exportAllPages && this.printMultiPageContainer) {
+      this.showToast('인쇄용 다중 페이지 문서를 준비 중입니다...');
+      try {
+        this.printMultiPageContainer.innerHTML = '';
+        const total = this.totalPages;
+
+        for (let p = 1; p <= total; p++) {
+          const page = await this.pdfDoc.getPage(p);
+          const viewport = page.getViewport({ scale: 1.5 });
+
+          const offscreen = document.createElement('canvas');
+          offscreen.width = Math.round(viewport.width);
+          offscreen.height = Math.round(viewport.height);
+          const ctx = offscreen.getContext('2d');
+
+          await page.render({
+            canvasContext: ctx,
+            viewport: viewport
+          }).promise;
+
+          const pageMasks = this.pageMasks[p] || [];
+          this.drawHandoutMasksOnCanvas(ctx, pageMasks, offscreen.width, offscreen.height, maskAll);
+
+          const sheetDiv = document.createElement('div');
+          sheetDiv.className = 'print-page-sheet';
+          const img = document.createElement('img');
+          img.src = offscreen.toDataURL('image/png');
+          img.alt = `페이지 ${p}`;
+          sheetDiv.appendChild(img);
+          this.printMultiPageContainer.appendChild(sheetDiv);
+        }
+
+        document.body.classList.add('print-multi-page-active');
+
+        const cleanupPrint = () => {
+          document.body.classList.remove('print-multi-page-active');
+          if (this.printMultiPageContainer) {
+            this.printMultiPageContainer.innerHTML = '';
+          }
+          window.removeEventListener('afterprint', cleanupPrint);
+        };
+        window.addEventListener('afterprint', cleanupPrint);
+
+        setTimeout(() => {
+          window.print();
+          setTimeout(cleanupPrint, 1500);
+        }, 250);
+        return;
+      } catch (err) {
+        console.error('다중 페이지 인쇄 준비 오류:', err);
+        document.body.classList.remove('print-multi-page-active');
+        if (this.printMultiPageContainer) this.printMultiPageContainer.innerHTML = '';
+        this.showToast('다중 페이지 인쇄 준비 중 오류가 발생했습니다. 현재 페이지로 인쇄합니다.', 'error');
+      }
+    }
+
+    // 단일 페이지 (이미지, 샘플 교재, 또는 PDF 현재 선택 페이지)
+    const prevZoom = this.zoom;
     const originalRevealedState = {};
 
     if (maskAll) {
@@ -2173,13 +2347,13 @@ class MaskingRemoverApp {
       this.renderMasks();
     }
 
-    // 인쇄 전 캔버스 줌 배율 일시 초기화 (A4 용지 맞춤 인쇄 보장)
+    // 인쇄 전 캔버스 줌 배율 일시 초기화
     this.canvasWrapper.style.transform = 'none';
     this.canvasWrapper.style.margin = '0 auto';
 
     setTimeout(() => {
       window.print();
-      // 인쇄 완료 후 원래 줌 및 가림판 상태 원상 복구
+      // 인쇄 완료 후 원상 복구
       setTimeout(() => {
         this.setZoom(prevZoom);
         if (maskAll) {

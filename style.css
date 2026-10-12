@@ -774,23 +774,39 @@ body.is-fullscreen .main-layout {
   top: 16px;
   left: 50%;
   transform: translateX(-50%);
-  background-color: rgba(255, 255, 255, 0.95);
+  background-color: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(8px);
   border: 1px solid var(--border-color);
   border-radius: 30px;
-  padding: 0.35rem 0.85rem;
+  padding: 0.4rem 1rem;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  box-shadow: var(--shadow-sm);
+  gap: 0.75rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
   z-index: 60;
   color: var(--text-primary);
+  user-select: none;
 }
 
 .page-indicator {
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 700;
   color: var(--text-primary);
+  padding: 2px 8px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.page-indicator:hover {
+  background-color: var(--bg-panel-subtle);
+  color: var(--accent-primary);
+}
+
+.page-nav-bar .btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* 모달 (단축키 안내 / 저장 / 인쇄) */
@@ -1475,5 +1491,55 @@ body.is-fullscreen .main-layout {
   .mask-text {
     text-align: left !important;
     color: #0f172a !important;
+  }
+}
+
+/* ============================================================
+ * 다중 페이지 인쇄 전용 컨테이너 및 시트 스타일
+ * ========================================================== */
+.print-multi-page-container {
+  display: none;
+}
+
+@media print {
+  /* 다중 페이지 인쇄 모드 동작 시 기존 단일 캔버스 뷰포트 숨김 */
+  body.print-multi-page-active #viewportContainer {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  body.print-multi-page-active .print-multi-page-container {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-page-sheet {
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    background: #ffffff !important;
+  }
+
+  .print-page-sheet:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .print-page-sheet img {
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100% !important;
+    display: block !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 }

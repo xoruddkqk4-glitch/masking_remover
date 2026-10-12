@@ -1,23 +1,26 @@
-# Agent Execution Rules: Masking Remover (수업용 가림판 도구)
+# Agent Execution Rules: Terminal-Only Fast Verification
 
 에이전트 실행 규칙: 터미널 전용 고속 검증 (`.agents/rules/rules.md`)
 
 ## 1. Browser & Scratchpad Policy (브라우저 및 시각 검증 정책)
-- **엄격 금지:** 일반적인 코드 수정 작업 중 브라우저(Chrome, Scratchpad 등)를 구동하거나 시각 검증을 자동으로 수행하지 않습니다.
-- **자동 스크린샷 금지:** 코드 수정 후 스크린샷 촬영이나 브라우저 시각 검사를 일체 자동으로 수행하지 않습니다.
-- 브라우저의 새로고침이나 사용자 브라우저를 신뢰합니다.
-- **명시적 예외 조건:** 오직 사용자가 `/scratchpad`, `/action scratchpad` 명령어를 명시적으로 입력하거나 "scratchpad로 검증해줘"라고 직접 요청한 경우에 한해 본 정책의 예외가 적용되어 Scratchpad / 브라우저 시각 검증 도구를 구동할 수 있습니다.
+- **STRICT REQUIREMENT:** Do NOT launch Chrome, Scratchpad, or any browser instance for visual verification during standard code editing tasks.
+- **NO AUTOMATIC SCREENSHOTS:** Never take screenshots or perform visual inspection automatically after editing code.
+- Trust Hot Module Replacement (HMR) on the user's browser for UI updates.
+- **EXCEPTIONS (명시적 예외 조건):** 오직 사용자가 `/scratchpad`, `/action scratchpad` 명령어를 명시적으로 입력하거나 "scratchpad로 검증해줘"라고 직접 요청한 경우에 한해 본 정책의 예외가 적용되어 Scratchpad / 브라우저 시각 검증 도구를 구동할 수 있습니다.
 
 ## 2. Terminal-Based Error Verification (터미널 기반 정적 오류 검증)
-- 코드 변경 후에는 브라우저 확인 대신 터미널 명령으로 빠른 정적 검증만 수행합니다.
-- HTML/JS/CSS 문법 검사:
-  - `node --check app.js` (JavaScript 구문 검사)
-- 경미한 경고는 끝없이 고치려 하지 말고 간단히 보고 후 종료합니다.
-- 무거운 데브 서버나 빌드 명령어를 임의로 실행하지 않습니다.
+- After making code changes, perform quick static verification via terminal commands instead of browser checks.
+- Runs fast type checking or linting depending on the project setup:
+  - TypeScript project: Run `npx tsc --noEmit` (or `npm run type-check`)
+  - Next.js / React project: Run `npm run lint`
+  - Vanilla JS / Node.js project: Run `node -c app.js` (또는 `node --check <file>.js`)
+  - Python project: Run `python -m py_compile <file>.py`
+- If non-critical lint warnings occur, do not get stuck in an endless fixing loop; report them briefly and conclude.
+- Do NOT run heavy dev servers, build commands (`npm run build`), or long-running test suites unless explicitly requested.
 
 ## 3. Workflow Optimization (일반 수정 모드)
 - **일반적 코드 수정/오류 복구 작업 시:**
-  - 코드 변경을 적용하고 빠른 터미널 오류 검증(구문/정합성 검사)만 수행한 후 즉시 작업을 종료합니다.
+  - 코드 변경을 적용하고 빠른 터미널 오류 검증(타입 체크/구문 검사)만 수행한 후 즉시 작업을 종료합니다.
   - **절대로 자동으로 Git 커밋(`git commit`) 및 푸시(`git push`)를 수행하지 않습니다.**
 - 사용자가 명시적으로 `/git-commit` 명령어를 입력할 때까지 커밋/푸시 없이 대기합니다.
 
@@ -27,7 +30,7 @@
 - **`/git-commit` 수신 시 수행 절차:**
   1. 작업 내용 및 검증 결과를 정리하여 `README.md` 하단에 누적 이력을 작성합니다.
   2. 상세한 커밋 메시지와 함께 `git add .` 및 `git commit`을 진행합니다.
-  3. GitHub 원격 저장소(`main` 브랜치)로 `git push`를 수행하고 결과를 사용자에게 종합 보고합니다.
+  3. GitHub 원격 저장소로 `git push`를 수행하고 결과를 사용자에게 종합 보고합니다.
 - `README.md` 업데이트 시 코드 수정 사항, 새로 구현된 기능, 발생한 문제 및 해결 과정, 검증 결과를 명확하게 기록해야 합니다.
 - **`README.md` 변경 이력 누적 기록 규칙:**
   - `README.md` 파일을 수정할 때, 업데이트되는 내용을 `README.md` 파일의 맨 뒷부분(하단)에 **날짜 및 시간(서울 기준 시각: YYYY-MM-DD HH:mm)** 기준으로 누적하여 기록해야 합니다.
@@ -43,3 +46,9 @@
 ## 6. `/scratchpad` 브라우저 검증 전용 모드 정책 (Visual Verification Explicit Exception)
 - 사용자로부터 `/scratchpad`, `/action scratchpad`, 또는 "scratchpad로 검증해줘"라는 명시적인 요청을 수신하는 경우, Rule 1 정책의 명시적 예외를 적용합니다.
 - Scratchpad 및 브라우저 검증 도구(`browser_subagent`)를 활용하여 대상 페이지 및 UI 인터액션 기능을 시각적으로 직접 확인하고 결과를 사용자에게 보고합니다.
+
+## 7. `/apply` 계획서 즉시 적용 모드 정책 (Plan Execution Mode)
+- 사용자로부터 `/apply`, `/action apply` 명령을 수신하면, 직전 `/ask` 모드나 아티팩트로 작성된 `implementation_plan.md` 계획서의 내용을 확인하고 소스 코드에 즉시 단계별로 반영합니다.
+- '반영해줘' 등의 자연어 승인 문구 없이도 `/apply` 명령어 하나로 즉시 구현을 시작합니다.
+- 코드 수정 후에는 Rule 2에 따라 빠른 터미널 정적 검증을 수행하고 결과를 보고합니다.
+- 단, Rule 3/4에 따라 자동 커밋 및 푸시는 진행하지 않으며 명시적인 `/git-commit` 수신 시에만 커밋/푸시를 수행합니다.

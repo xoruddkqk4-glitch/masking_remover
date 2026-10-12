@@ -522,6 +522,23 @@
           </label>
         </div>
 
+        <!-- PDF 다중 페이지 문서 출력 범위 선택 영역 -->
+        <div id="printPageRangeSection" style="margin-bottom: 1.25rem; display: none; flex-direction: column; gap: 0.5rem; background: var(--bg-panel-subtle); padding: 0.65rem 0.85rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">
+            📄 출력 페이지 범위 선택
+          </div>
+          <div style="display: flex; gap: 1.2rem; align-items: center; margin-top: 0.2rem;">
+            <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+              <input type="radio" name="printPageRange" id="printRangeAll" value="all" checked style="cursor: pointer;">
+              <span>전체 페이지 (<strong id="printTotalPagesCount">1</strong>쪽 모두 출력)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+              <input type="radio" name="printPageRange" id="printRangeCurrent" value="current" style="cursor: pointer;">
+              <span>현재 페이지만 (<strong id="printCurrentPageNum">1</strong>쪽)</span>
+            </label>
+          </div>
+        </div>
+
         <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.25rem;">
           <button id="downloadPdfDirectBtn" class="btn btn-primary" style="justify-content: center; padding: 0.8rem 1rem; font-size: 0.95rem; font-weight: 600;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -551,6 +568,9 @@
 
   <!-- 토스트 알림 컨테이너 -->
   <div id="toastContainer" class="toast-container"></div>
+
+  <!-- 다중 페이지 유인물 인쇄 전용 컨테이너 (인쇄 시에만 표시됨) -->
+  <div id="printMultiPageContainer" class="print-multi-page-container" aria-hidden="true"></div>
 
   <!-- 애플리케이션 스크립트 -->
   <script src="app.js"></script>
