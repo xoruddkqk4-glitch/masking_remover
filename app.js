@@ -356,11 +356,26 @@ class MaskingRemoverApp {
       if (e.target === this.helpModal) this.helpModal.classList.remove('open');
     });
 
-    // 사이드바 단축키 아코디언 토글 (클릭 시 아래로 펼쳐짐/접힘)
+    // 사이드바 단축키 아코디언 토글 (클릭 시 아래로 펼쳐짐/접힘 및 상태 복원)
     if (this.toggleShortcutsBtn && this.shortcutsSectionCard) {
+      const savedShortcutsState = localStorage.getItem('masking_shortcuts_open');
+      if (savedShortcutsState === 'false') {
+        this.shortcutsSectionCard.classList.remove('open');
+        this.toggleShortcutsBtn.setAttribute('aria-expanded', 'false');
+      } else {
+        this.shortcutsSectionCard.classList.add('open');
+        this.toggleShortcutsBtn.setAttribute('aria-expanded', 'true');
+      }
+
       this.toggleShortcutsBtn.addEventListener('click', () => {
         const isOpen = this.shortcutsSectionCard.classList.toggle('open');
         this.toggleShortcutsBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        localStorage.setItem('masking_shortcuts_open', isOpen ? 'true' : 'false');
+        if (isOpen) {
+          setTimeout(() => {
+            this.shortcutsSectionCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }, 120);
+        }
       });
     }
 
@@ -385,14 +400,6 @@ class MaskingRemoverApp {
 
     // 키보드 단축키
     window.addEventListener('keydown', (e) => this.handleKeyDown(e));
-
-    // 사이드바 하단 단축키 안내 아코디언 토글
-    if (this.toggleShortcutsBtn && this.shortcutsSectionCard) {
-      this.toggleShortcutsBtn.addEventListener('click', () => {
-        const isOpen = this.shortcutsSectionCard.classList.toggle('open');
-        this.toggleShortcutsBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      });
-    }
 
     // 진행상황 패널 마우스/터치 드래그앤드롭 이동 초기화
     this.initDraggablePresentationBar();

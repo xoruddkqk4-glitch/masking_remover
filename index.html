@@ -345,7 +345,7 @@
         </div>
 
         <!-- 마스크 목록 -->
-        <div class="section-card" style="flex: 1; display: flex; flex-direction: column;">
+        <div class="section-card" style="display: flex; flex-direction: column; flex-shrink: 0;">
           <div class="section-card-title">
             <span>마스크 순번 목록</span>
             <button id="clearAllMasksBtn" class="btn btn-danger btn-sm" title="현재 페이지의 모든 마스크를 삭제합니다">전체 삭제</button>
@@ -360,8 +360,8 @@
 
 
         <!-- 사이드바 맨 하단 수업용 단축키 안내 (클릭 시 아래로 펼쳐지는 아코디언 디자인) -->
-        <div id="shortcutsSectionCard" class="section-card shortcuts-accordion" style="margin-top: auto;">
-          <button id="toggleShortcutsBtn" class="shortcuts-accordion-header" type="button" aria-expanded="false" title="클릭하여 단축키 안내 열기/닫기">
+        <div id="shortcutsSectionCard" class="section-card shortcuts-accordion open" style="flex-shrink: 0; margin-top: 0.25rem;">
+          <button id="toggleShortcutsBtn" class="shortcuts-accordion-header" type="button" aria-expanded="true" title="클릭하여 단축키 안내 열기/닫기">
             <div class="shortcuts-accordion-title">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="2" y="4" width="20" height="16" rx="2"></rect>
