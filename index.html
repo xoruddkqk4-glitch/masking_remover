@@ -61,19 +61,6 @@
 
     <!-- 우측 도구 모음 -->
     <div class="toolbar-group">
-      <!-- 파일 업로드 인풋 -->
-      <input type="file" id="fileInput" accept="image/*,application/pdf,.mask" style="display: none;">
-      <button id="uploadBtn" class="btn btn-primary" title="수업 프로젝트(.mask), PDF 문서 또는 이미지를 엽니다 (최근 작업 폴더 자동 열림)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="17 8 12 3 7 8"></polyline>
-          <line x1="12" y1="3" x2="12" y2="15"></line>
-        </svg>
-        파일 열기
-      </button>
-
-      <div class="divider"></div>
-
       <!-- 단어 카드 모드 -->
       <button id="wordCardModeBtn" class="btn btn-sm" title="단어 카드 포커스 모드 (C)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -81,16 +68,6 @@
           <path d="M7 15h10M7 9h10"></path>
         </svg>
         단어 카드
-      </button>
-
-      <!-- 학생용 유인물 인쇄 & PDF 저장 -->
-      <button id="printHandoutBtn" class="btn btn-sm btn-print" title="가림판(빈칸)이 포함된 학생용 유인물 인쇄 또는 PDF 저장 (Ctrl+P)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="6 9 6 2 18 2 18 9"></polyline>
-          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-          <rect x="6" y="14" width="12" height="8"></rect>
-        </svg>
-        유인물 인쇄/PDF
       </button>
 
       <div class="divider"></div>
@@ -154,6 +131,178 @@
       </div>
 
       <div class="sidebar-content">
+        <!-- 파일 및 프로젝트 관리 허브 (상위 3대 계층: 불러오기 / 저장하기 / 다른 이름으로 저장하기) -->
+        <div class="section-card file-hub-card">
+          <div class="section-card-title">
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>파일 & 프로젝트 관리</span>
+            </div>
+            <span id="fileHubStatusBadge" class="hub-status-badge" title="최근 작업 폴더 자동 연동 활성화">
+              <span class="status-dot"></span> 최근 폴더 연동
+            </span>
+          </div>
+
+          <!-- 활성 파일/프로젝트 연결 상태 정보 바 -->
+          <div id="currentProjectInfo" class="hub-active-file-bar" style="display: none;">
+            <div class="active-file-inner">
+              <span class="active-file-icon">📄</span>
+              <span id="currentProjectName" class="active-file-name"></span>
+              <span class="active-file-tag">덮어쓰기 연동</span>
+            </div>
+          </div>
+
+          <!-- 상위 계층: 3단 세그먼트 컨트롤 탭 -->
+          <div class="file-hub-tabs" role="tablist">
+            <button id="hubTabImport" class="file-hub-tab-btn active" type="button" role="tab" aria-selected="true" title="교재 문서, 설정, 수업 프로젝트를 불러옵니다">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>불러오기</span>
+            </button>
+            <button id="hubTabSave" class="file-hub-tab-btn" type="button" role="tab" aria-selected="false" title="현재 상태를 스마트 덮어쓰기 저장합니다 (Ctrl+S)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+              </svg>
+              <span>저장하기</span>
+            </button>
+            <button id="hubTabSaveAs" class="file-hub-tab-btn" type="button" role="tab" aria-selected="false" title="최근 작업 폴더를 열고 새 파일명으로 저장합니다">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+              </svg>
+              <span>다른 이름 저장</span>
+            </button>
+          </div>
+
+          <!-- 하위 계층 1: 불러오기 패널 (PDF, JSON, MASK) -->
+          <div id="hubPanelImport" class="file-hub-panel active">
+            <div class="file-format-group">
+              <button id="hubOpenPdfBtn" class="file-format-btn" type="button" title="최근 작업 폴더에서 PDF 교재 또는 이미지를 엽니다">
+                <div class="format-btn-left">
+                  <span class="format-badge badge-pdf">PDF</span>
+                  <div class="format-btn-text">
+                    <span class="format-main-label">PDF / 이미지 교재</span>
+                    <span class="format-sub-label">새 문서 불러오기</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+
+              <button id="hubOpenJsonBtn" class="file-format-btn" type="button" title="최근 작업 폴더에서 가림판 좌표/텍스트 설정(.json)을 불러옵니다">
+                <div class="format-btn-left">
+                  <span class="format-badge badge-json">JSON</span>
+                  <div class="format-btn-text">
+                    <span class="format-main-label">가림판 좌표/설정</span>
+                    <span class="format-sub-label">설정 파일 불러오기</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+
+              <button id="hubOpenMaskBtn" class="file-format-btn highlight-mask" type="button" title="교재와 가림판이 통합된 수업 프로젝트(.mask)를 엽니다 (Ctrl+O)">
+                <div class="format-btn-left">
+                  <span class="format-badge badge-mask">MASK</span>
+                  <div class="format-btn-text">
+                    <span class="format-main-label">수업 프로젝트</span>
+                    <span class="format-sub-label">통합 복원 (Ctrl+O)</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 하위 계층 2: 저장하기 패널 (PDF, JSON, MASK) -->
+          <div id="hubPanelSave" class="file-hub-panel">
+            <div class="file-format-group">
+              <button id="hubSavePdfBtn" class="file-format-btn" type="button" title="최근 작업 폴더에 학생용 빈칸 유인물 PDF를 저장합니다">
+                <div class="format-btn-left">
+                  <span class="format-badge badge-pdf">PDF</span>
+                  <div class="format-btn-text">
+                    <span class="format-main-label">학생용 유인물 PDF</span>
+                    <span class="format-sub-label">빈칸 학습지 저장</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              </button>
+
+              <button id="hubSaveJsonBtn" class="file-format-btn" type="button" title="가림판 설정을 저장합니다 (연결 파일 덮어쓰기 / 최근 폴더)">
+                <div class="format-btn-left">
+                  <span class="format-badge badge-json">JSON</span>
+                  <div class="format-btn-text">
+                    <span class="format-main-label">가림판 좌표/설정</span>
+                    <span class="format-sub-label">설정 덮어쓰기 저장</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline></svg>
+              </button>
+
+              <button id="hubSaveMaskBtn" class="file-format-btn highlight-mask" type="button" title="수업 프로젝트를 저장합니다. 연결된 파일이 있으면 즉시 덮어씁니다 (Ctrl+S)">
+                <div class="format-btn-left">
+                  <span class="format-badge badge-mask">MASK</span>
+                  <div class="format-btn-text">
+                    <span class="format-main-label">수업 프로젝트 저장</span>
+                    <span class="format-sub-label">스마트 덮어쓰기 (Ctrl+S)</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 하위 계층 3: 다른 이름으로 저장하기 패널 (PDF, JSON, MASK) -->
+          <div id="hubPanelSaveAs" class="file-hub-panel">
+            <div class="file-format-group">
+              <button id="hubSaveAsPdfBtn" class="file-format-btn" type="button" title="유인물 인쇄 및 다중 페이지 PDF 출력 옵션 대화상자를 엽니다 (Ctrl+P)">
+                <div class="format-btn-left">
+                  <span class="format-badge badge-pdf">PDF</span>
+                  <div class="format-btn-text">
+                    <span class="format-main-label">유인물 인쇄 & 내보내기</span>
+                    <span class="format-sub-label">옵션/인쇄 모달 (Ctrl+P)</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+              </button>
+
+              <button id="hubSaveAsJsonBtn" class="file-format-btn" type="button" title="최근 작업 폴더를 열고 새로운 파일 이름으로 가림판 설정을 저장합니다">
+                <div class="format-btn-left">
+                  <span class="format-badge badge-json">JSON</span>
+                  <div class="format-btn-text">
+                    <span class="format-main-label">새 이름으로 JSON 저장</span>
+                    <span class="format-sub-label">최근 작업 폴더 복사본</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line></svg>
+              </button>
+
+              <button id="hubSaveAsMaskBtn" class="file-format-btn highlight-mask" type="button" title="최근 작업 폴더를 열고 새로운 프로젝트 파일명으로 복사 저장합니다 (Ctrl+Shift+S)">
+                <div class="format-btn-left">
+                  <span class="format-badge badge-mask">MASK</span>
+                  <div class="format-btn-text">
+                    <span class="format-main-label">새 이름 프로젝트 저장</span>
+                    <span class="format-sub-label">복사본 저장 (Ctrl+Shift+S)</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 숨겨진 Fallback 파일 인풋 요소들 -->
+          <input type="file" id="fileInput" accept="image/*,application/pdf,.mask" style="display: none;">
+          <input type="file" id="projectFileInput" accept=".mask,.json,application/pdf,image/*" style="display: none;">
+          <input type="file" id="jsonFileInput" accept=".json" style="display: none;">
+        </div>
+
         <!-- 가림판 스타일 선택 -->
         <div class="section-card">
           <div class="section-card-title">새 가림판 스타일</div>
@@ -191,66 +340,6 @@
           </div>
         </div>
 
-        <!-- 수업 프로젝트 파일 관리 (.mask) -->
-        <div class="section-card">
-          <div class="section-card-title">수업 프로젝트 관리 (.mask)</div>
-          
-          <div style="font-size: 0.74rem; color: var(--text-muted); margin-bottom: 0.65rem; line-height: 1.45;">
-            💡 원본 교재(PDF)와 가림판이 <strong>하나의 .mask 파일로 통합 저장</strong>되어, 다음 수업 시 단 한 번에 완벽 복원됩니다.
-          </div>
-
-          <!-- 현재 연결/불러온 프로젝트 파일 상태 표시 -->
-          <div id="currentProjectInfo" style="display: none; font-size: 0.74rem; color: var(--accent-primary); background-color: var(--accent-subtle); padding: 5px 9px; border-radius: 6px; border: 1px solid rgba(37, 99, 235, 0.2); margin-bottom: 0.65rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            📄 <span id="currentProjectName" style="font-weight: 600;"></span> <span style="opacity: 0.8; font-size: 0.68rem;">(덮어쓰기 연결됨)</span>
-          </div>
-
-          <!-- 3대 핵심 파일 액션 버튼 그룹 (불러오기 / 저장하기 / 새 이름으로 저장하기) -->
-          <div class="project-btn-group">
-            <button id="openProjectBtn" class="project-action-btn" title="최근 작업 폴더에서 .mask 프로젝트 파일(또는 PDF/이미지)을 엽니다 (Ctrl + O)">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-              </svg>
-              <span>프로젝트 불러오기 (Ctrl+O)</span>
-            </button>
-
-            <button id="saveProjectBtn" class="project-action-btn btn-highlight" title="현재 수업 프로젝트를 저장합니다. 이미 열린 파일이 있으면 바로 덮어쓰기 저장됩니다 (Ctrl + S)">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                <polyline points="7 3 7 8 15 8"></polyline>
-              </svg>
-              <span>저장하기 (덮어쓰기 Ctrl+S)</span>
-            </button>
-
-            <button id="saveAsProjectBtn" class="project-action-btn" title="최근 작업 폴더를 열고 새로운 파일 이름으로 복사 저장합니다 (Ctrl + Shift + S)">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="12" y1="18" x2="12" y2="12"></line>
-                <line x1="9" y1="15" x2="15" y2="15"></line>
-              </svg>
-              <span>새 이름으로 저장하기</span>
-            </button>
-
-            <input type="file" id="projectFileInput" accept=".mask,.json,application/pdf,image/*" style="display: none;">
-          </div>
-
-          <!-- 보조: 가림판 설정만 따로 내보내기/불러오기 (.json 호환용) -->
-          <details style="margin-top: 0.65rem; font-size: 0.74rem; color: var(--text-muted);">
-            <summary style="cursor: pointer; user-select: none; opacity: 0.85; padding: 2px 0;">
-              ⚙️ 가림판 좌표만 따로 저장/불러오기 (.json)
-            </summary>
-            <div style="display: flex; gap: 0.4rem; margin-top: 0.45rem;">
-              <button id="exportJsonBtn" class="btn btn-sm" style="flex: 1; font-size: 0.72rem; justify-content: center;" title="가림판 설정만 가벼운 .json 파일로 저장">
-                JSON 설정 저장
-              </button>
-              <button id="importJsonBtn" class="btn btn-sm" style="flex: 1; font-size: 0.72rem; justify-content: center;" title="가림판 설정 .json 파일 불러오기">
-                JSON 설정 불러오기
-              </button>
-            </div>
-            <input type="file" id="jsonFileInput" accept=".json" style="display: none;">
-          </details>
-        </div>
 
         <!-- 사이드바 맨 하단 수업용 단축키 안내 (클릭 시 아래로 펼쳐지는 아코디언 디자인) -->
         <div id="shortcutsSectionCard" class="section-card shortcuts-accordion" style="margin-top: auto;">
