@@ -49,6 +49,9 @@ class MaskingRemoverApp {
     // DOM 요소 캐시
     this.initDOMElements();
 
+    // 전역 테마 초기화 (다크/라이트 모드)
+    this.initTheme();
+
     // 이벤트 리스너 등록
     this.bindEvents();
 
@@ -112,7 +115,14 @@ class MaskingRemoverApp {
     this.currentJsonInfo = document.getElementById('currentJsonInfo');
     this.currentJsonName = document.getElementById('currentJsonName');
 
-    // 파일 & 프로젝트 허브 요소 (상위 3대 계층 및 9대 하위 버튼)
+    // 테마 토글 버튼 요소
+    this.themeToggleBtn = document.getElementById('themeToggleBtn');
+    this.themeIconMoon = document.getElementById('themeIconMoon');
+    this.themeIconSun = document.getElementById('themeIconSun');
+
+    // 파일 & 프로젝트 허브 요소 (상위 3대 계층 및 9대 하위 버튼, 접이식 아코디언)
+    this.fileHubCard = document.getElementById('fileHubCard');
+    this.toggleFileHubBtn = document.getElementById('toggleFileHubBtn');
     this.fileHubStatusBadge = document.getElementById('fileHubStatusBadge');
     this.hubTabImport = document.getElementById('hubTabImport');
     this.hubTabSave = document.getElementById('hubTabSave');
@@ -125,11 +135,9 @@ class MaskingRemoverApp {
     this.hubOpenJsonBtn = document.getElementById('hubOpenJsonBtn');
     this.hubOpenMaskBtn = document.getElementById('hubOpenMaskBtn');
 
-    this.hubSavePdfBtn = document.getElementById('hubSavePdfBtn');
     this.hubSaveJsonBtn = document.getElementById('hubSaveJsonBtn');
     this.hubSaveMaskBtn = document.getElementById('hubSaveMaskBtn');
 
-    this.hubSaveAsPdfBtn = document.getElementById('hubSaveAsPdfBtn');
     this.hubSaveAsJsonBtn = document.getElementById('hubSaveAsJsonBtn');
     this.hubSaveAsMaskBtn = document.getElementById('hubSaveAsMaskBtn');
 
@@ -141,7 +149,7 @@ class MaskingRemoverApp {
     this.currentProjectInfo = document.getElementById('currentProjectInfo');
     this.currentProjectName = document.getElementById('currentProjectName');
     this.uploadBtn = this.hubOpenPdfBtn || document.getElementById('uploadBtn');
-    this.printHandoutBtn = this.hubSaveAsPdfBtn || document.getElementById('printHandoutBtn');
+    this.printHandoutBtn = document.getElementById('printHandoutBtn');
     this.exportJsonBtn = this.hubSaveJsonBtn || document.getElementById('exportJsonBtn');
     this.importJsonBtn = this.hubOpenJsonBtn || document.getElementById('importJsonBtn');
     this.saveAsJsonBtn = this.hubSaveAsJsonBtn || document.getElementById('saveAsJsonBtn');
@@ -394,6 +402,25 @@ class MaskingRemoverApp {
    * 파일 & 프로젝트 관리 허브 탭 및 9대 하위 액션 버튼 등록
    * ----------------------------------------------------------- */
   setupFileHub() {
+    // 0. 파일 & 프로젝트 관리 허브 아코디언 토글 (클릭 시 펼치기/접기)
+    if (this.toggleFileHubBtn && this.fileHubCard) {
+      // 로컬 스토리지에서 이전 펼침 상태 복원 (기본값: open)
+      const savedHubState = localStorage.getItem('masking_file_hub_open');
+      if (savedHubState === 'false') {
+        this.fileHubCard.classList.remove('open');
+        this.toggleFileHubBtn.setAttribute('aria-expanded', 'false');
+      } else {
+        this.fileHubCard.classList.add('open');
+        this.toggleFileHubBtn.setAttribute('aria-expanded', 'true');
+      }
+
+      this.toggleFileHubBtn.addEventListener('click', () => {
+        const isOpen = this.fileHubCard.classList.toggle('open');
+        this.toggleFileHubBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        localStorage.setItem('masking_file_hub_open', isOpen ? 'true' : 'false');
+      });
+    }
+
     // 1. 상위 3대 계층 세그먼트 탭 전환 이벤트
     if (this.hubTabImport && this.hubTabSave && this.hubTabSaveAs) {
       const tabs = [
@@ -417,7 +444,7 @@ class MaskingRemoverApp {
       });
     }
 
-    // 2. 하위 계층 9대 포맷 버튼 이벤트
+    // 2. 하위 계층 포맷 버튼 이벤트
     // [1] 불러오기 패널 (PDF, JSON, MASK)
     if (this.hubOpenPdfBtn) {
       this.hubOpenPdfBtn.addEventListener('click', () => this.handleOpenPdf());
@@ -429,10 +456,7 @@ class MaskingRemoverApp {
       this.hubOpenMaskBtn.addEventListener('click', () => this.openProject());
     }
 
-    // [2] 저장하기 패널 (PDF, JSON, MASK)
-    if (this.hubSavePdfBtn) {
-      this.hubSavePdfBtn.addEventListener('click', () => this.exportStudentPdf());
-    }
+    // [2] 저장하기 패널 (JSON, MASK)
     if (this.hubSaveJsonBtn) {
       this.hubSaveJsonBtn.addEventListener('click', () => this.exportToJson());
     }
@@ -440,10 +464,7 @@ class MaskingRemoverApp {
       this.hubSaveMaskBtn.addEventListener('click', () => this.exportProject());
     }
 
-    // [3] 다른 이름으로 저장 패널 (PDF, JSON, MASK)
-    if (this.hubSaveAsPdfBtn) {
-      this.hubSaveAsPdfBtn.addEventListener('click', () => this.openPrintHandoutModal());
-    }
+    // [3] 다른 이름으로 저장 패널 (JSON, MASK)
     if (this.hubSaveAsJsonBtn) {
       this.hubSaveAsJsonBtn.addEventListener('click', () => this.saveAsJson());
     }
@@ -458,6 +479,50 @@ class MaskingRemoverApp {
     if (this.jsonFileInput) {
       this.jsonFileInput.addEventListener('change', (e) => this.importFromJson(e));
     }
+  }
+
+  /* -------------------------------------------------------------
+   * 다크 / 라이트 모드 전역 테마 관리 엔진
+   * ----------------------------------------------------------- */
+  initTheme() {
+    const savedTheme = localStorage.getItem('masking_remover_theme');
+    const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+    this.applyTheme(initialTheme);
+
+    if (this.themeToggleBtn) {
+      this.themeToggleBtn.addEventListener('click', () => this.toggleTheme());
+    }
+
+    // 시스템 OS 다크모드 설정 변경 감지 (사용자가 수동 설정하지 않은 경우)
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('masking_remover_theme')) {
+          this.applyTheme(e.matches ? 'dark' : 'light');
+        }
+      });
+    }
+  }
+
+  applyTheme(theme) {
+    this.currentTheme = theme;
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      if (this.themeIconMoon) this.themeIconMoon.style.display = 'none';
+      if (this.themeIconSun) this.themeIconSun.style.display = 'block';
+      if (this.themeToggleBtn) this.themeToggleBtn.setAttribute('title', '라이트 모드로 전환');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      if (this.themeIconMoon) this.themeIconMoon.style.display = 'block';
+      if (this.themeIconSun) this.themeIconSun.style.display = 'none';
+      if (this.themeToggleBtn) this.themeToggleBtn.setAttribute('title', '다크 모드로 전환');
+    }
+  }
+
+  toggleTheme() {
+    const nextTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('masking_remover_theme', nextTheme);
+    this.applyTheme(nextTheme);
   }
 
   /* -------------------------------------------------------------
