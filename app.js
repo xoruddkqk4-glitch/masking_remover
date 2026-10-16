@@ -218,8 +218,10 @@ class MaskingRemoverApp {
       requestAnimationFrame(() => this.fitToWidth());
     });
 
-    // 파일 업로드 (최근 작업 폴더 연동 showOpenFilePicker 우선 호출)
-    this.uploadBtn.addEventListener('click', () => this.handleOpenWorksheet());
+    // 레거시 파일 업로드 버튼 (hubOpenPdfBtn과의 중복 이벤트 바인딩 방지)
+    if (this.uploadBtn && this.uploadBtn !== this.hubOpenPdfBtn) {
+      this.uploadBtn.addEventListener('click', () => this.handleOpenWorksheet());
+    }
     this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
 
     // 드래그 앤 드롭 파일 로딩 (외부 OS 파일 드래그 시에만 파일 드롭 오버레이 활성화)

@@ -321,3 +321,12 @@
   - 단축키 카드 클릭 시 정상적인 펼침/접힘 동작 및 로컬 스토리지 상태 보존 검증 완료
   - 사이드바 내부 휠 스크롤 및 하단 단축키 목록 100% 가시성 확보 확인 완료
 
+## [2026-10-16 23:17] 업데이트 이력 (Commit ID: 343bc3fd9a59c2f2bacfca03ba45108904bf371d)
+- **수정 내용**:
+  - **레거시 파일 업로드 버튼 이벤트 바인딩 예외 처리 및 중복 등록 방지**:
+    * `app.js`의 `bindEvents()` 내에서 `this.uploadBtn` 존재 여부(null-check) 및 파일 허브 버튼(`hubOpenPdfBtn`)과의 동일 여부 검사(`this.uploadBtn && this.uploadBtn !== this.hubOpenPdfBtn`) 가드 조건문 추가
+    * 헤더 UI 개편으로 기존 `uploadBtn` 엘리먼트가 DOM에 존재하지 않거나 파일 허브의 `hubOpenPdfBtn`과 중복될 때 발생할 수 있는 잠재적 런타임 오류(null 참조 에러) 및 파일 선택창 중복 호출 현상 사전 방지
+- **검증 결과**:
+  - `node --check app.js` 자바스크립트 문법 검사 통과 (0 error)
+  - 파일 열기 및 파일 허브 이벤트 바인딩 정합성 검증 완료
+
